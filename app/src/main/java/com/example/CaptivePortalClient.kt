@@ -1,5 +1,9 @@
 package com.example
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -11,10 +15,11 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
- * Kültür ve Turizm Bakanlığı (KTB) kütüphane Wi-Fi captive portalı ile
- * HTTP üzerinden haberleşen OkHttp istemcisi.
+ * Kultur ve Turizm Bakanligi (KTB) kutuphane Wi-Fi captive portali ile
+ * haberlesen ve ag trafigini zorunlu Wi-Fi arayuzune baglayan OkHttp istemcisi.
  */
 class CaptivePortalClient(
+    private val context: Context,
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
@@ -24,13 +29,19 @@ class CaptivePortalClient(
 ) {
 
     companion object {
+        private const val TAG = "CaptivePortalClient"
         private const val BASE_URL = "http://captive.kultur.gov.tr"
         private const val CREATE_SMS_TOKEN_URL = "$BASE_URL/users/createSmsToken"
         private const val VALIDATE_SMS_TOKEN_URL = "$BASE_URL/users/validateSmsToken"
         private const val CONNECTIVITY_CHECK_URL = "http://connectivitycheck.gstatic.com/generate_204"
 
+        // Nginx / Express sunucu beklentisi olan basliklar
         private const val HEADER_ORIGIN = "http://captive.kultur.gov.tr"
         private const val HEADER_REFERER = "http://captive.kultur.gov.tr/"
+        private const val HEADER_USER_AGENT = "Mozilla/5.0 (Android 16; Mobile; rv:159.0) Gecko/159.0 Firefox/159.0"
+        private const val HEADER_ACCEPT = "application/json, text/plain, */*"
+        private const val HEADER_ACCEPT_LANGUAGE = "tr-TR"
+
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 
@@ -42,17 +53,51 @@ class CaptivePortalClient(
     )
 
     /**
-     * 1. ADIM: SMS Doğrulama Kodu İsteği
+     * Android'in internetsiz Wi-Fi baglantilarinda trafigi otomatik olarak
+     * mobil veriye (LTE/5G) yonlendirmesini engelleyip, soketleri Wi-Fi agina kilitler.
+     */
+    private fun bindProcessToWifiNetwork(): Boolean {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return false
+
+            val wifiNetwork = cm.allNetworks.firstOrNull { network ->
+                val caps = cm.getNetworkCapabilities(network)
+                caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+            }
+
+            if (wifiNetwork != null) {
+                val bound = cm.bindProcessToNetwork(wifiNetwork)
+                Log.d(TAG, "Ag Wi-Fi arayuzune baglandi (bindProcessToNetwork): $bound")
+                bound
+            } else {
+                Log.w(TAG, "Aktif bir Wi-Fi agi bulunamadi.")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Wi-Fi agina baglanirken hata: ${e.localizedMessage}")
+            false
+        }
+    }
+
+    /**
+     * 1. ADIM: SMS Dogrulama Kodu Istegi
      *
      * Method: POST
      * URL: http://captive.kultur.gov.tr/users/createSmsToken
      * Headers:
      *   - Content-Type: application/json
+     *   - Accept: application/json, text/plain, * / *
+     *   - Accept-Language: tr-TR
      *   - Origin: http://captive.kultur.gov.tr
      *   - Referer: http://captive.kultur.gov.tr/
+     *   - User-Agent: Mozilla/5.0 (Android 16; Mobile; rv:159.0) Gecko/159.0 Firefox/159.0
      * Body: {"phone_number": "905xxxxxxxxx"}
      */
     suspend fun createSmsToken(phoneNumber: String): PortalResult = withContext(Dispatchers.IO) {
+        // Trafigi Wi-Fi arayuzune kilitle
+        bindProcessToWifiNetwork()
+
         val jsonBody = JSONObject().apply {
             put("phone_number", phoneNumber)
         }.toString()
@@ -62,9 +107,11 @@ class CaptivePortalClient(
         val request = Request.Builder()
             .url(CREATE_SMS_TOKEN_URL)
             .addHeader("Content-Type", "application/json")
+            .addHeader("Accept", HEADER_ACCEPT)
+            .addHeader("Accept-Language", HEADER_ACCEPT_LANGUAGE)
             .addHeader("Origin", HEADER_ORIGIN)
             .addHeader("Referer", HEADER_REFERER)
-            .addHeader("User-Agent", "Mozilla/5.0 (Android; Mobile; KTB-WiFi-Assistant)")
+            .addHeader("User-Agent", HEADER_USER_AGENT)
             .post(requestBody)
             .build()
 
@@ -72,23 +119,12 @@ class CaptivePortalClient(
             client.newCall(request).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 val statusCode = response.code
-
-                if (!response.isSuccessful && statusCode != 200) {
-                    return@withContext PortalResult(
-                        isSuccess = false,
-                        message = "Sunucu yanıt kodu: $statusCode",
-                        rawResponse = bodyString,
-                        httpStatusCode = statusCode
-                    )
-                }
-
-                // JSON yanıtını incele: {"isSuccess": true, ...}
-                parsePortalResponse(bodyString, statusCode, "SMS doğrulama kodu başarıyla istendi.")
+                parsePortalResponse(bodyString, statusCode, "SMS dogrulama kodu basariyla istendi.")
             }
         } catch (e: IOException) {
             PortalResult(
                 isSuccess = false,
-                message = "Bağlantı hatası: ${e.localizedMessage ?: "Captive portala ulaşılamadı. Lütfen kütüphane Wi-Fi ağına bağlı olduğunuzdan emin olun."}",
+                message = "Baglanti hatasi: ${e.localizedMessage ?: "Captive portala ulasilamadi. Kutuphane Wi-Fi agina bagli oldugunuzdan emin olun."}",
                 httpStatusCode = -1
             )
         } catch (e: Exception) {
@@ -101,15 +137,18 @@ class CaptivePortalClient(
     }
 
     /**
-     * 2. ADIM: Doğrulama ve Giriş İsteği
+     * 2. ADIM: Dogrulama ve Giris Istegi
      *
      * Method: POST
      * URL: http://captive.kultur.gov.tr/users/validateSmsToken
-     * Headers: 1. adımla aynı
+     * Headers: 1. adim ile ayni eksiksiz basliklar
      * Body: {"phone_number": "905xxxxxxxxx", "verification_code": "XXXXXX"}
      */
     suspend fun validateSmsToken(phoneNumber: String, verificationCode: String): PortalResult =
         withContext(Dispatchers.IO) {
+            // Trafigi Wi-Fi arayuzune kilitle
+            bindProcessToWifiNetwork()
+
             val jsonBody = JSONObject().apply {
                 put("phone_number", phoneNumber)
                 put("verification_code", verificationCode.trim())
@@ -120,9 +159,11 @@ class CaptivePortalClient(
             val request = Request.Builder()
                 .url(VALIDATE_SMS_TOKEN_URL)
                 .addHeader("Content-Type", "application/json")
+                .addHeader("Accept", HEADER_ACCEPT)
+                .addHeader("Accept-Language", HEADER_ACCEPT_LANGUAGE)
                 .addHeader("Origin", HEADER_ORIGIN)
                 .addHeader("Referer", HEADER_REFERER)
-                .addHeader("User-Agent", "Mozilla/5.0 (Android; Mobile; KTB-WiFi-Assistant)")
+                .addHeader("User-Agent", HEADER_USER_AGENT)
                 .post(requestBody)
                 .build()
 
@@ -130,37 +171,28 @@ class CaptivePortalClient(
                 client.newCall(request).execute().use { response ->
                     val bodyString = response.body?.string().orEmpty()
                     val statusCode = response.code
-
-                    if (!response.isSuccessful && statusCode != 200) {
-                        return@withContext PortalResult(
-                            isSuccess = false,
-                            message = "Giriş başarısız (HTTP $statusCode)",
-                            rawResponse = bodyString,
-                            httpStatusCode = statusCode
-                        )
-                    }
-
-                    parsePortalResponse(bodyString, statusCode, "İnternet Bağlantısı Başarılı!")
+                    parsePortalResponse(bodyString, statusCode, "Internet Baglantisi Basarili!")
                 }
             } catch (e: IOException) {
                 PortalResult(
                     isSuccess = false,
-                    message = "Bağlantı hatası: ${e.localizedMessage}",
+                    message = "Dogrulama baglanti hatasi: ${e.localizedMessage}",
                     httpStatusCode = -1
                 )
             } catch (e: Exception) {
                 PortalResult(
                     isSuccess = false,
-                    message = "Doğrulama hatası: ${e.localizedMessage}",
+                    message = "Dogrulama hatasi: ${e.localizedMessage}",
                     httpStatusCode = -1
                 )
             }
         }
 
     /**
-     * İnternet erişiminin aktif olup olmadığını denetler (Captive portal kalktı mı?)
+     * Captive portalin kalkip kuresel internetin acildigini test eder.
      */
     suspend fun checkInternetConnectivity(): Boolean = withContext(Dispatchers.IO) {
+        bindProcessToWifiNetwork()
         val request = Request.Builder()
             .url(CONNECTIVITY_CHECK_URL)
             .get()
@@ -174,6 +206,10 @@ class CaptivePortalClient(
         }
     }
 
+    /**
+     * Sunucu yanitini ayristirir.
+     * Oncelikle JSON icindeki 'resultMessage' alanini okur, yoksa alternatif alanlara bakar.
+     */
     private fun parsePortalResponse(
         rawBody: String,
         statusCode: Int,
@@ -182,27 +218,35 @@ class CaptivePortalClient(
         return try {
             val json = JSONObject(rawBody)
             val isSuccess = json.optBoolean("isSuccess", false)
-            val message = when {
-                json.has("message") -> json.optString("message")
-                json.has("msg") -> json.optString("msg")
-                json.has("error") -> json.optString("error")
+
+            // Sunucunun dondurdugu hata veya basari mesajini ayikla
+            val serverMessage = when {
+                json.has("resultMessage") && !json.isNull("resultMessage") -> json.optString("resultMessage")
+                json.has("message") && !json.isNull("message") -> json.optString("message")
+                json.has("msg") && !json.isNull("msg") -> json.optString("msg")
+                json.has("error") && !json.isNull("error") -> json.optString("error")
+                else -> null
+            }
+
+            val finalMessage = when {
+                !serverMessage.isNullOrBlank() -> serverMessage
                 isSuccess -> defaultSuccessMessage
-                else -> "İşlem captive portal tarafından onaylanmadı."
+                statusCode != 200 -> "Sunucu yanit kodu: $statusCode"
+                else -> "Islem captive portal tarafindan onaylanmadi."
             }
 
             PortalResult(
                 isSuccess = isSuccess,
-                message = if (message.isNotBlank()) message else defaultSuccessMessage,
+                message = finalMessage,
                 rawResponse = rawBody,
                 httpStatusCode = statusCode
             )
         } catch (_: Exception) {
-            // Yanıt JSON formatında değilse (örneğin HTML hata sayfası döndüyse)
             val lower = rawBody.lowercase()
             val seemsSuccess = lower.contains("\"issuccess\": true") || lower.contains("\"issuccess\":true")
             PortalResult(
                 isSuccess = seemsSuccess,
-                message = if (seemsSuccess) defaultSuccessMessage else "Sunucudan beklenmeyen yanıt formatı alındı.",
+                message = if (seemsSuccess) defaultSuccessMessage else if (statusCode != 200) "Sunucu hata kodu: $statusCode" else "Sunucudan beklenmeyen yanit alindi.",
                 rawResponse = rawBody.take(500),
                 httpStatusCode = statusCode
             )

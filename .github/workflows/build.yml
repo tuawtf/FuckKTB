@@ -5,10 +5,10 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: # GitHub UI üzerinden manuel çalıştırma imkanı
+  workflow_dispatch: # GitHub UI uzerinden manuel calistirma imkani
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -30,17 +30,17 @@ jobs:
 
       - name: Prepare Environment & Keystore
         run: |
-          # Gradlew çalıştırma izni ver
+          # Gradlew calistirma izni ver
           chmod +x gradlew
 
-          # .env dosyası yoksa şablondan oluştur
+          # .env dosyasi yoksa sablondan olustur
           if [ ! -f ".env" ] && [ -f ".env.example" ]; then
             cp .env.example .env
           elif [ ! -f ".env" ]; then
             touch .env
           fi
 
-          # Debug keystore hazırla
+          # Debug imzalama anahtarini hazirla
           if [ -f "debug.keystore.base64" ]; then
             echo "Decoding debug.keystore from base64..."
             base64 -d debug.keystore.base64 > debug.keystore
@@ -57,7 +57,7 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload Debug APK
+      - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: KTB-WiFi-Debug-APK
@@ -71,3 +71,31 @@ jobs:
           name: unit-test-reports
           path: app/build/reports/tests/testDebugUnitTest/
           retention-days: 7
+
+      - name: Prepare Release Assets
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          mkdir -p release-assets
+          cp app/build/outputs/apk/debug/*.apk release-assets/KTB-WiFi-Build-${{ github.run_number }}.apk
+
+      - name: Publish Pre-Release to GitHub
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pre-v1.0.0-b${{ github.run_number }}
+          name: "KTB Wi-Fi Pre-Release (Build #${{ github.run_number }})"
+          body: |
+            KTB Kutuphane Wi-Fi Giris Yardimcisi Otomatik Pre-Release
+
+            - Derleme Numarasi: ${{ github.run_number }}
+            - Commit: ${{ github.sha }}
+            - Dal: ${{ github.ref_name }}
+
+            Derlenen APK dosyasi asagida yer almaktadir.
+          prerelease: true
+          draft: false
+          generate_release_notes: true
+          files: |
+            release-assets/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

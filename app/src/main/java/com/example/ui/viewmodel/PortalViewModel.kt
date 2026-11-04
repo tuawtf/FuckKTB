@@ -1,4 +1,4 @@
-package com.example
+package com.example.ui.viewmodel
 
 import android.app.Application
 import android.content.Context
@@ -7,11 +7,18 @@ import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.CaptivePortalClient
+import com.example.SmsReceiver
+import com.example.data.UserPreferences
+import com.example.data.UserPreferencesRepository
+import com.example.util.PhoneUtils
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -34,7 +41,7 @@ enum class LogLevel {
     ERROR
 }
 
-data class LogEntry(
+data class LogItem(
     val id: Long = System.currentTimeMillis() + (0..999).random(),
     val timestamp: String,
     val level: LogLevel,
@@ -50,14 +57,25 @@ data class PortalUiState(
     val countdownSeconds: Int = 120,
     val isWifiConnected: Boolean = false,
     val wifiSsid: String? = null,
-    val logs: List<LogEntry> = emptyList(),
-    val isAutoValidateEnabled: Boolean = true
+    val logs: List<LogItem> = emptyList()
 )
 
 class PortalViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val client = CaptivePortalClient()
+    private val userPrefsRepo = UserPreferencesRepository(application)
+    private val client = CaptivePortalClient(application)
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+    val userPreferences: StateFlow<UserPreferences> = userPrefsRepo.userPreferencesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = UserPreferences(
+                phoneNumber = "",
+                isOnboardingCompleted = false,
+                isAutoConnectEnabled = false
+            )
+        )
 
     private val _uiState = MutableStateFlow(PortalUiState())
     val uiState: StateFlow<PortalUiState> = _uiState.asStateFlow()
@@ -65,45 +83,59 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     private var countdownJob: Job? = null
 
     init {
-        // Önceden kaydedilmiş telefon numarasını yükle
-        loadSavedPhoneNumber()
+        // DataStore'daki kayitli telefon numarasini izle
+        viewModelScope.launch {
+            userPreferences.collect { prefs ->
+                if (prefs.phoneNumber.isNotBlank() && _uiState.value.phoneNumber.isBlank()) {
+                    _uiState.update { it.copy(phoneNumber = prefs.phoneNumber) }
+                    addLog(LogLevel.INFO, "Kayitli numara DataStore uzerinden yuklendi: " + PhoneUtils.formatForDisplay(prefs.phoneNumber))
+                }
+            }
+        }
 
-        // Ağ durumunu kontrol et
         checkWifiState()
-
-        // SMS Dinleyici akışını sürekli dinle
         observeSmsEvents()
-
-        addLog(LogLevel.INFO, "KTB Wi-Fi Otomatik Giriş başlatıldı.")
+        addLog(LogLevel.INFO, "KTB Wi-Fi Yardimcisi baslatildi.")
     }
 
-    private fun loadSavedPhoneNumber() {
-        val saved = PhoneUtils.getSavedPhoneNumber(getApplication())
-        if (!saved.isNullOrBlank()) {
-            _uiState.update { it.copy(phoneNumber = saved) }
-            addLog(LogLevel.INFO, "Kayıtlı telefon numarası yüklendi: ${PhoneUtils.formatForDisplay(saved)}")
+    fun updatePhoneNumber(phone: String) {
+        val normalized = PhoneUtils.normalizePhoneNumber(phone)
+        _uiState.update { it.copy(phoneNumber = normalized, errorMessage = null) }
+        viewModelScope.launch {
+            userPrefsRepo.setPhoneNumber(normalized)
         }
     }
 
-    fun onPhoneNumberChanged(newPhone: String) {
-        val normalized = PhoneUtils.normalizePhoneNumber(newPhone)
-        _uiState.update { it.copy(phoneNumber = normalized, errorMessage = null) }
-        PhoneUtils.savePhoneNumber(getApplication(), normalized)
+    fun completeOnboarding(phoneNumber: String) {
+        val normalized = PhoneUtils.normalizePhoneNumber(phoneNumber)
+        _uiState.update { it.copy(phoneNumber = normalized) }
+        viewModelScope.launch {
+            userPrefsRepo.setPhoneNumber(normalized)
+            userPrefsRepo.setOnboardingCompleted(true)
+            addLog(LogLevel.SUCCESS, "Ilk kurulum basariyla tamamlandi.")
+        }
+    }
+
+    fun setAutoConnect(enabled: Boolean) {
+        viewModelScope.launch {
+            userPrefsRepo.setAutoConnectEnabled(enabled)
+            addLog(
+                LogLevel.INFO,
+                if (enabled) "Otomatik baglanma acildi." else "Otomatik baglanma kapatildi."
+            )
+        }
+    }
+
+    fun resetOnboarding() {
+        viewModelScope.launch {
+            userPrefsRepo.setOnboardingCompleted(false)
+            addLog(LogLevel.WARNING, "Kurulum sihirbazi sifirlandi.")
+        }
     }
 
     fun onVerificationCodeChanged(code: String) {
         val digits = code.filter { it.isDigit() }.take(6)
         _uiState.update { it.copy(verificationCode = digits, errorMessage = null) }
-    }
-
-    fun tryAutoDetectPhoneNumber(context: Context) {
-        val detected = PhoneUtils.detectDevicePhoneNumber(context)
-        if (detected != null) {
-            onPhoneNumberChanged(detected)
-            addLog(LogLevel.SUCCESS, "SIM karttan numara otomatik algılandı: ${PhoneUtils.formatForDisplay(detected)}")
-        } else {
-            addLog(LogLevel.WARNING, "Cihazdan numara otomatik alınamadı. Lütfen elle giriniz.")
-        }
     }
 
     fun checkWifiState() {
@@ -126,62 +158,49 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             _uiState.update {
-                it.copy(
-                    isWifiConnected = isWifi,
-                    wifiSsid = ssid
-                )
+                it.copy(isWifiConnected = isWifi, wifiSsid = ssid)
             }
         } catch (_: Exception) {}
     }
 
-    /**
-     * SmsReceiver'dan gelen kodları yakalar ve bekleme durumundaysa otomatik giriş yapar.
-     */
     private fun observeSmsEvents() {
         viewModelScope.launch {
             SmsReceiver.smsEvents.collect { event ->
-                addLog(LogLevel.SUCCESS, "SMS Yakalandı! Gönderici: ${event.sender}")
-                addLog(LogLevel.INFO, "Doğrulama Kodu: ${event.verificationCode}")
+                addLog(LogLevel.SUCCESS, "SMS Yakalandi! Gonderici: " + event.sender)
+                addLog(LogLevel.INFO, "Dogrulama Kodu: " + event.verificationCode)
 
                 _uiState.update {
-                    it.copy(
-                        verificationCode = event.verificationCode
-                    )
+                    it.copy(verificationCode = event.verificationCode)
                 }
 
-                // Otomatik doğrulama açık ise ve SMS bekliyorsak veya hazır durumdaysak doğrudan doğrula
-                if (_uiState.value.isAutoValidateEnabled) {
-                    validateSmsToken(event.verificationCode)
-                }
+                // Otomatik giris akisini tetikle
+                validateSmsToken(event.verificationCode)
             }
         }
     }
 
     /**
-     * 1. ADIM: "Bağlan" butonu tetiklendiğinde createSmsToken isteği atar.
+     * 1. ADIM: "Baglan" butonuna basildiginda createSmsToken istegi atar.
      */
     fun startConnectionFlow() {
         val currentPhone = _uiState.value.phoneNumber
         if (!PhoneUtils.isValidTurkishMobile(currentPhone)) {
-            val error = "Lütfen geçerli bir cep telefonu numarası girin (Örn: 05xx xxx xx xx)"
+            val error = "Gecerli bir cep telefonu numarasi gereklidir (Ornek: 05xx xxx xx xx)"
             _uiState.update { it.copy(errorMessage = error) }
             addLog(LogLevel.ERROR, error)
             return
         }
 
-        // Numarayı kalıcı kaydet
-        PhoneUtils.savePhoneNumber(getApplication(), currentPhone)
-
         _uiState.update {
             it.copy(
                 step = PortalStep.REQUESTING_SMS,
-                statusMessage = "SMS Kodu İsteniyor...",
+                statusMessage = "SMS Kodu Isteniyor...",
                 errorMessage = null,
                 verificationCode = ""
             )
         }
 
-        addLog(LogLevel.INFO, "POST http://captive.kultur.gov.tr/users/createSmsToken ($currentPhone)")
+        addLog(LogLevel.INFO, "POST http://captive.kultur.gov.tr/users/createSmsToken (" + currentPhone + ")")
 
         viewModelScope.launch {
             val result = client.createSmsToken(currentPhone)
@@ -190,34 +209,34 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 _uiState.update {
                     it.copy(
                         step = PortalStep.WAITING_SMS,
-                        statusMessage = "SMS Kodu Bekleniyor... (KUL.TUR.BKN)",
+                        statusMessage = "SMS Kodu Bekleniyor...",
                         countdownSeconds = 120
                     )
                 }
-                addLog(LogLevel.SUCCESS, "SMS talebi başarılı! KUL.TUR.BKN tarafından SMS gönderildi.")
+                addLog(LogLevel.SUCCESS, "SMS talebi iletildi. KUL.TUR.BKN SMS'i bekleniyor.")
                 startCountdown()
             } else {
                 _uiState.update {
                     it.copy(
                         step = PortalStep.ERROR,
-                        statusMessage = "SMS Talebi Başarısız",
+                        statusMessage = "SMS Talebi Basarisiz",
                         errorMessage = result.message
                     )
                 }
-                addLog(LogLevel.ERROR, "SMS Hatası: ${result.message} (HTTP ${result.httpStatusCode})")
+                addLog(LogLevel.ERROR, "SMS Hatasi: " + result.message + " (HTTP " + result.httpStatusCode + ")")
             }
         }
     }
 
     /**
-     * 2. ADIM: Doğrulama kodunu portal API'sine gönderir ve bağlantıyı tamamlar.
+     * 2. ADIM: Dogrulama kodunu portala gonderip giris yapar.
      */
     fun validateSmsToken(code: String = _uiState.value.verificationCode) {
         val currentPhone = _uiState.value.phoneNumber
         val cleanCode = code.trim()
 
         if (cleanCode.length != 6) {
-            val error = "Doğrulama kodu 6 haneli olmalıdır."
+            val error = "Dogrulama kodu 6 haneli olmalidir."
             _uiState.update { it.copy(errorMessage = error) }
             addLog(LogLevel.ERROR, error)
             return
@@ -228,13 +247,13 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update {
             it.copy(
                 step = PortalStep.VALIDATING,
-                statusMessage = "Doğrulanıyor ve Giriş Yapılıyor...",
+                statusMessage = "Giris Yapiliyor...",
                 verificationCode = cleanCode,
                 errorMessage = null
             )
         }
 
-        addLog(LogLevel.INFO, "POST http://captive.kultur.gov.tr/users/validateSmsToken ($cleanCode)")
+        addLog(LogLevel.INFO, "POST http://captive.kultur.gov.tr/users/validateSmsToken (" + cleanCode + ")")
 
         viewModelScope.launch {
             val result = client.validateSmsToken(currentPhone, cleanCode)
@@ -243,35 +262,33 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 _uiState.update {
                     it.copy(
                         step = PortalStep.SUCCESS,
-                        statusMessage = "İnternet Bağlantısı Başarılı!",
+                        statusMessage = "Internet Baglantisi Basarili!",
                         errorMessage = null
                     )
                 }
-                addLog(LogLevel.SUCCESS, "TEBRİKLER: İnternet Bağlantısı Başarılı! KTB WiFi aktif.")
-
-                // İnternet erişimini doğrulamak için test pingi at
-                checkInternetAfterLogin()
+                addLog(LogLevel.SUCCESS, "Internet Baglantisi Basarili! Captive portal acildi.")
+                verifyGlobalInternet()
             } else {
                 _uiState.update {
                     it.copy(
                         step = PortalStep.ERROR,
-                        statusMessage = "Giriş Başarısız",
+                        statusMessage = "Giris Basarisiz",
                         errorMessage = result.message
                     )
                 }
-                addLog(LogLevel.ERROR, "Doğrulama Hatası: ${result.message} (HTTP ${result.httpStatusCode})")
+                addLog(LogLevel.ERROR, "Dogrulama Hatasi: " + result.message + " (HTTP " + result.httpStatusCode + ")")
             }
         }
     }
 
-    private fun checkInternetAfterLogin() {
+    private fun verifyGlobalInternet() {
         viewModelScope.launch {
             delay(1500)
             val isOnline = client.checkInternetConnectivity()
             if (isOnline) {
-                addLog(LogLevel.SUCCESS, "Ağ Kontrolü: Küresel internet bağlantısı teyit edildi (HTTP 204 OK).")
+                addLog(LogLevel.SUCCESS, "Ag Denetimi: Kuresel internet erisimi dogrulandi (HTTP 204).")
             } else {
-                addLog(LogLevel.INFO, "Ağ Kontrolü: Captive portal yanıt verdi, tarayıcıda gezinmeye başlayabilirsiniz.")
+                addLog(LogLevel.INFO, "Ag Denetimi: Captive portal onay verdi, internet erisimi hazir.")
             }
         }
     }
@@ -284,7 +301,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 delay(1000)
             }
             if (_uiState.value.step == PortalStep.WAITING_SMS) {
-                addLog(LogLevel.WARNING, "SMS bekleme süresi doldu. Tekrar 'SMS İste' diyebilirsiniz.")
+                addLog(LogLevel.WARNING, "SMS bekleme suresi doldu. Yeniden SMS isteyebilirsiniz.")
             }
         }
     }
@@ -299,14 +316,11 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 verificationCode = ""
             )
         }
-        addLog(LogLevel.INFO, "Durum sıfırlandı.")
+        addLog(LogLevel.INFO, "Baglanti durumu sifirlandi.")
     }
 
-    /**
-     * Test / Simülasyon: Kullanıcı emülatörde veya gerçek SMS olmadan testi deneyebilsin.
-     */
-    fun simulateMockSms(mockCode: String = "594586") {
-        addLog(LogLevel.INFO, "--- TEST SİMÜLASYONU TETİKLENDİ ---")
+    fun simulateSmsArrival(mockCode: String = "594586") {
+        addLog(LogLevel.INFO, "Test SMS simulasyonu tetiklendi (Kod: " + mockCode + ")")
         val sender = "KUL.TUR.BKN"
         val body = "Dogrulama kodu: $mockCode Bu kodu kullanarak KTB Wifi hizmetinden yararlanabilirsiniz. B001"
         SmsReceiver.simulateSmsArrival(sender, body, mockCode)
@@ -316,15 +330,14 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update { it.copy(logs = emptyList()) }
     }
 
-    private fun addLog(level: LogLevel, message: String) {
-        val entry = LogEntry(
+    fun addLog(level: LogLevel, message: String) {
+        val item = LogItem(
             timestamp = timeFormat.format(Date()),
             level = level,
             message = message
         )
         _uiState.update {
-            val updated = it.logs + entry
-            // Son 100 logu tut
+            val updated = it.logs + item
             it.copy(logs = updated.takeLast(100))
         }
     }

@@ -1,0 +1,74 @@
+package com.example.data
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
+import java.io.IOException
+
+val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "ktb_wifi_preferences")
+
+data class UserPreferences(
+    val phoneNumber: String,
+    val isOnboardingCompleted: Boolean,
+    val isAutoConnectEnabled: Boolean
+)
+
+class UserPreferencesRepository(private val context: Context) {
+
+    companion object {
+        val KEY_PHONE_NUMBER = stringPreferencesKey("phone_number")
+        val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val KEY_AUTO_CONNECT_ENABLED = booleanPreferencesKey("auto_connect_enabled")
+    }
+
+    val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            val phoneNumber = preferences[KEY_PHONE_NUMBER].orEmpty()
+            val isOnboardingCompleted = preferences[KEY_ONBOARDING_COMPLETED] ?: false
+            val isAutoConnectEnabled = preferences[KEY_AUTO_CONNECT_ENABLED] ?: false
+            UserPreferences(
+                phoneNumber = phoneNumber,
+                isOnboardingCompleted = isOnboardingCompleted,
+                isAutoConnectEnabled = isAutoConnectEnabled
+            )
+        }
+
+    suspend fun setPhoneNumber(phoneNumber: String) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_PHONE_NUMBER] = phoneNumber
+        }
+    }
+
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_ONBOARDING_COMPLETED] = completed
+        }
+    }
+
+    suspend fun setAutoConnectEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_AUTO_CONNECT_ENABLED] = enabled
+        }
+    }
+
+    suspend fun resetAll() {
+        context.dataStore.edit { preferences ->
+            preferences.clear()
+        }
+    }
+}
