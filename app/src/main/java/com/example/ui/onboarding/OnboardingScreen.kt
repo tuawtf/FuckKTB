@@ -81,7 +81,10 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -346,6 +349,7 @@ private fun StepWelcome(
     buttonText: Color,
     onNext: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -402,7 +406,10 @@ private fun StepWelcome(
             Spacer(modifier = Modifier.height(20.dp))
 
             Button(
-                onClick = onNext,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onNext()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
@@ -455,6 +462,7 @@ private fun StepSmsPermission(
     onBack: () -> Unit,
     onGrantPermission: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -518,7 +526,10 @@ private fun StepSmsPermission(
             ) {
                 // Sol: Dairesel Geri Butonu
                 Surface(
-                    onClick = onBack,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onBack()
+                    },
                     shape = CircleShape,
                     color = darkButtonBg,
                     modifier = Modifier
@@ -540,7 +551,10 @@ private fun StepSmsPermission(
 
                 // Sag: "Izin Veriyorum" Butonu
                 Button(
-                    onClick = onGrantPermission,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onGrantPermission()
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .height(56.dp)
@@ -596,6 +610,7 @@ private fun StepPhonePermission(
     onSkip: () -> Unit,
     onGrantPermission: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -653,7 +668,10 @@ private fun StepPhonePermission(
 
             // "Simdilik atla" Hap Butonu (Açıklamanın hemen altında)
             Surface(
-                onClick = onSkip,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onSkip()
+                },
                 shape = CircleShape,
                 color = darkButtonBg,
                 modifier = Modifier.testTag("step3_skip_button")
@@ -681,7 +699,10 @@ private fun StepPhonePermission(
             ) {
                 // Sol: Dairesel Geri Butonu (1. adima doner)
                 Surface(
-                    onClick = onBack,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onBack()
+                    },
                     shape = CircleShape,
                     color = darkButtonBg,
                     modifier = Modifier
@@ -703,7 +724,10 @@ private fun StepPhonePermission(
 
                 // Sag: "Izin Veriyorum" Butonu
                 Button(
-                    onClick = onGrantPermission,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onGrantPermission()
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .height(56.dp)
@@ -763,6 +787,7 @@ private fun StepPhoneNumberDetermination(
     onFinish: () -> Unit
 ) {
     val isValid = digits.length == 10
+    val haptic = LocalHapticFeedback.current
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -832,7 +857,7 @@ private fun StepPhoneNumberDetermination(
                     .weight(1f)
                     .height(66.dp)
                     .background(Color(0xFF161A22), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 16.dp)
+                    .padding(horizontal = 12.dp)
                     .testTag("step4_phone_input_box"),
                 contentAlignment = Alignment.CenterStart
             ) {
@@ -843,7 +868,7 @@ private fun StepPhoneNumberDetermination(
                     // En solda Material3 SimCard Ikonu
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(34.dp)
                             .background(darkButtonBg, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
@@ -851,11 +876,11 @@ private fun StepPhoneNumberDetermination(
                             imageVector = Icons.Default.SimCard,
                             contentDescription = null,
                             tint = textSecondary,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     // Ust etiket ve Yerinde Maskelenmis Numara Alani
                     Column(
@@ -874,7 +899,11 @@ private fun StepPhoneNumberDetermination(
                         Text(
                             text = buildMaskedPhoneAnnotatedString(digits),
                             fontFamily = FontFamily.Monospace,
-                            letterSpacing = 0.5.sp,
+                            fontSize = 15.5.sp,
+                            letterSpacing = 0.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip,
                             modifier = Modifier.testTag("step4_phone_input")
                         )
                     }
@@ -888,7 +917,10 @@ private fun StepPhoneNumberDetermination(
                 exit = fadeOut() + shrinkHorizontally()
             ) {
                 Surface(
-                    onClick = onAutoFill,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onAutoFill()
+                    },
                     shape = RoundedCornerShape(20.dp),
                     color = Color(0xFF161A22),
                     modifier = Modifier
@@ -931,7 +963,10 @@ private fun StepPhoneNumberDetermination(
         ) {
             // Sol: Dairesel Geri Butonu (2. adima doner)
             Surface(
-                onClick = onBack,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onBack()
+                },
                 shape = CircleShape,
                 color = darkButtonBg,
                 modifier = Modifier
@@ -953,7 +988,10 @@ private fun StepPhoneNumberDetermination(
 
             // Sag: "Bitir" Butonu (weight(1f), 54.dp, 10 hane tamamlandiginda aktif)
             Button(
-                onClick = onFinish,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onFinish()
+                },
                 enabled = isValid,
                 modifier = Modifier
                     .weight(1f)
@@ -1059,6 +1097,7 @@ private fun NumericKeypad(
     onBackspaceLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1088,8 +1127,14 @@ private fun NumericKeypad(
                                     .height(52.dp)
                                     .clip(RoundedCornerShape(16.dp))
                                     .combinedClickable(
-                                        onClick = onBackspaceClick,
-                                        onLongClick = onBackspaceLongClick
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            onBackspaceClick()
+                                        },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            onBackspaceLongClick()
+                                        }
                                     )
                                     .testTag("keypad_backspace")
                             ) {
@@ -1115,7 +1160,10 @@ private fun NumericKeypad(
                                     .weight(1f)
                                     .height(52.dp)
                                     .clip(RoundedCornerShape(16.dp))
-                                    .clickable { onDigitClick(item.digit) }
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onDigitClick(item.digit)
+                                    }
                                     .testTag("keypad_key_${item.digit}")
                             ) {
                                 Row(
@@ -1163,8 +1211,7 @@ private fun buildMaskedPhoneAnnotatedString(
         withStyle(
             SpanStyle(
                 color = activeColor,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 17.sp
+                fontWeight = FontWeight.SemiBold
             )
         ) {
             append("0 ")
@@ -1177,8 +1224,7 @@ private fun buildMaskedPhoneAnnotatedString(
                 withStyle(
                     SpanStyle(
                         color = spaceColor,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 17.sp
+                        fontWeight = FontWeight.Normal
                     )
                 ) {
                     append(" ")
@@ -1189,8 +1235,7 @@ private fun buildMaskedPhoneAnnotatedString(
                 withStyle(
                     SpanStyle(
                         color = activeColor,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 17.sp
+                        fontWeight = FontWeight.SemiBold
                     )
                 ) {
                     append(digits[i])
@@ -1199,8 +1244,7 @@ private fun buildMaskedPhoneAnnotatedString(
                 withStyle(
                     SpanStyle(
                         color = placeholderColor,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 17.sp
+                        fontWeight = FontWeight.Normal
                     )
                 ) {
                     append("0")

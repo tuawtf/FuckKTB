@@ -117,37 +117,53 @@ import com.example.ui.viewmodel.PortalStep
 import com.example.ui.viewmodel.PortalViewModel
 import com.example.util.PhoneUtils
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+
 @Composable
 fun MainScreen(
     viewModel: PortalViewModel,
     onResetOnboarding: () -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(MainTab.CONNECT) }
+    var selectedTab by remember { mutableStateOf(MainTab.HOME) }
     val uiState by viewModel.uiState.collectAsState()
     val userPrefs by viewModel.userPreferences.collectAsState()
+    var showMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 6.dp
-            ) {
-                MainTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = selectedTab == tab,
-                        onClick = { selectedTab = tab },
-                        icon = {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.title
-                            )
-                        },
-                        label = { Text(tab.title) },
-                        modifier = Modifier.testTag("tab_" + tab.name.lowercase())
-                    )
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopBarSection(
+                title = selectedTab.title,
+                onMenuClick = { showMenu = true },
+                showMenu = showMenu,
+                onDismissMenu = { showMenu = false },
+                onResetOnboarding = {
+                    showMenu = false
+                    viewModel.resetOnboarding()
+                    onResetOnboarding()
+                },
+                onClearLogs = {
+                    showMenu = false
+                    viewModel.clearLogs()
                 }
-            }
+            )
+        },
+        bottomBar = {
+            CustomBottomBar(
+                selectedTab = selectedTab,
+                onTabSelected = { selectedTab = it }
+            )
         }
     ) { innerPadding ->
         Box(
@@ -161,7 +177,8 @@ fun MainScreen(
                 label = "main_tab_content"
             ) { tab ->
                 when (tab) {
-                    MainTab.CONNECT -> ConnectTabContent(viewModel = viewModel)
+                    MainTab.HOME -> ConnectTabContent(viewModel = viewModel)
+                    MainTab.CONNECTIONS -> ConnectionsTabContent()
                     MainTab.LOGS -> LogsTabContent(viewModel = viewModel)
                     MainTab.SETTINGS -> SettingsTabContent(
                         viewModel = viewModel,
@@ -483,7 +500,6 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
 // -------------------------------------------------------------
 // 2. SEKME: GUNLUK (LOGS)
 // -------------------------------------------------------------
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LogsTabContent(viewModel: PortalViewModel) {
     val context = LocalContext.current
@@ -496,47 +512,46 @@ private fun LogsTabContent(viewModel: PortalViewModel) {
         }
     }
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = "Aktivite Gunlugu",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            val text = uiState.logs.joinToString("\n") { "[" + it.timestamp + "] " + it.message }
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("KTB Logs", text))
-                            Toast.makeText(context, "Gunluk panoya kopyalandi", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.testTag("copy_logs_button")
-                    ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Kopyala")
-                    }
-
-                    IconButton(
-                        onClick = { viewModel.clearLogs() },
-                        modifier = Modifier.testTag("clear_logs_button")
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Temizle")
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
-    ) { innerPadding ->
-        Column(
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        // Toolbar: Günlük başlığı ve hızlı eylem butonları
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Text(
+                text = "Kayıtlar (${uiState.logs.size})",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = Color(0xFF8E95A5)
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                IconButton(
+                    onClick = {
+                        val text = uiState.logs.joinToString("\n") { "[" + it.timestamp + "] " + it.message }
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("KTB Logs", text))
+                        Toast.makeText(context, "Günlük panoya kopyalandı", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.size(36.dp).testTag("copy_logs_button")
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Kopyala", modifier = Modifier.size(18.dp))
+                }
+
+                IconButton(
+                    onClick = { viewModel.clearLogs() },
+                    modifier = Modifier.size(36.dp).testTag("clear_logs_button")
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "Temizle", modifier = Modifier.size(18.dp))
+                }
+            }
+        }
             if (uiState.logs.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -642,12 +657,10 @@ private fun LogsTabContent(viewModel: PortalViewModel) {
             }
         }
     }
-}
 
 // -------------------------------------------------------------
 // 3. SEKME: AYARLAR (SETTINGS)
 // -------------------------------------------------------------
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsTabContent(
     viewModel: PortalViewModel,
@@ -657,28 +670,12 @@ private fun SettingsTabContent(
 ) {
     var showEditPhoneDialog by remember { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = "Ayarlar",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
             // 1. Telefon Numarasi Ayari
             item {
                 Card(
@@ -879,19 +876,18 @@ private fun SettingsTabContent(
                 }
             }
         }
-    }
 
-    if (showEditPhoneDialog) {
-        EditPhoneDialog(
-            currentPhone = registeredPhone,
-            onDismiss = { showEditPhoneDialog = false },
-            onSave = { newPhone ->
-                viewModel.updatePhoneNumber(newPhone)
-                showEditPhoneDialog = false
-            }
-        )
+        if (showEditPhoneDialog) {
+            EditPhoneDialog(
+                currentPhone = registeredPhone,
+                onDismiss = { showEditPhoneDialog = false },
+                onSave = { newPhone ->
+                    viewModel.updatePhoneNumber(newPhone)
+                    showEditPhoneDialog = false
+                }
+            )
+        }
     }
-}
 
 @Composable
 private fun EditPhoneDialog(
@@ -984,4 +980,207 @@ private fun ManualCodeDialog(
             }
         }
     )
+}
+
+// -------------------------------------------------------------
+// 2. SEKME: BAGLANTILAR (CONNECTIONS) - Bos / Placeholder Ekran
+// -------------------------------------------------------------
+@Composable
+private fun ConnectionsTabContent() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFF161A22),
+                modifier = Modifier.size(80.dp)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccountTree,
+                        contentDescription = null,
+                        tint = Color(0xFF9EC5EA),
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = "Bağlantılar",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = "Kayıtlı kütüphane ağları ve geçmiş bağlantı noktaları burada listelenecektir.",
+                color = Color(0xFF8E95A5),
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 20.sp
+            )
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// EKRAN USTU BUYUK BASLIK (TOP BAR)
+// -------------------------------------------------------------
+@Composable
+private fun TopBarSection(
+    title: String,
+    onMenuClick: () -> Unit,
+    showMenu: Boolean,
+    onDismissMenu: () -> Unit,
+    onResetOnboarding: () -> Unit,
+    onClearLogs: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            color = Color.White,
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = (-0.5).sp,
+            modifier = Modifier.testTag("screen_top_title")
+        )
+
+        Box {
+            IconButton(
+                onClick = onMenuClick,
+                modifier = Modifier
+                    .size(40.dp)
+                    .testTag("top_bar_more_menu_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "Daha Fazla",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = onDismissMenu
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Kurulum Sihirbazını Sıfırla") },
+                    onClick = onResetOnboarding,
+                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text("Aktivite Günlüğünü Temizle") },
+                    onClick = onClearLogs,
+                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) }
+                )
+            }
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// YENI MATERIAL 3 BOTTOM BAR (4 SEKME, PILL & OFFSET ANIMASYONU)
+// -------------------------------------------------------------
+@Composable
+private fun CustomBottomBar(
+    selectedTab: MainTab,
+    onTabSelected: (MainTab) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+
+    Surface(
+        color = Color(0xFF12151D),
+        tonalElevation = 8.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            MainTab.entries.forEach { tab ->
+                val isSelected = tab == selectedTab
+                val iconOffsetY by animateDpAsState(
+                    targetValue = if (isSelected) (-4).dp else 0.dp,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "tab_icon_offset"
+                )
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable {
+                            if (!isSelected) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onTabSelected(tab)
+                            }
+                        }
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                        .testTag("tab_" + tab.name.lowercase())
+                ) {
+                    val pillModifier = if (isSelected) {
+                        Modifier
+                            .offset(y = iconOffsetY)
+                            .background(
+                                color = Color(0xFF1B2E48),
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                    } else {
+                        Modifier
+                            .offset(y = iconOffsetY)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    }
+
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = pillModifier
+                    ) {
+                        Icon(
+                            imageVector = tab.icon,
+                            contentDescription = tab.title,
+                            tint = if (isSelected) Color(0xFF9EC5EA) else Color(0xFF8E95A5),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    if (isSelected) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = tab.title,
+                            color = Color(0xFF9EC5EA),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

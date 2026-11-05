@@ -2,8 +2,9 @@ package com.example.ui.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.ui.graphics.vector.ImageVector
 
 sealed class Screen {
@@ -15,7 +16,8 @@ enum class MainTab(
     val title: String,
     val icon: ImageVector
 ) {
-    CONNECT("Bağlan", Icons.Default.Wifi),
+    HOME("Home", Icons.Default.Home),
+    CONNECTIONS("Bağlantılar", Icons.Default.AccountTree),
     LOGS("Günlük", Icons.AutoMirrored.Filled.ReceiptLong),
     SETTINGS("Ayarlar", Icons.Default.Settings)
 }
