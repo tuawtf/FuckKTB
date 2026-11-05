@@ -1,5 +1,5 @@
 {
-  "name": "KTB WiFi Giriş",
+  "name": "FKTB",
   "description": "Kütüphane Wi-Fi captive portalı için otomatik SMS doğrulama ve hızlı giriş uygulaması",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

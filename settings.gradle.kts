@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "KTB WiFi Giriş"
+rootProject.name = "FKTB"
 
 include(":app")
