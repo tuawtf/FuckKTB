@@ -1,7 +1,7 @@
 package com.example.ui.navigation
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -16,6 +16,6 @@ enum class MainTab(
     val icon: ImageVector
 ) {
     CONNECT("Bağlan", Icons.Default.Wifi),
-    LOGS("Günlük", Icons.Default.ReceiptLong),
+    LOGS("Günlük", Icons.AutoMirrored.Filled.ReceiptLong),
     SETTINGS("Ayarlar", Icons.Default.Settings)
 }
