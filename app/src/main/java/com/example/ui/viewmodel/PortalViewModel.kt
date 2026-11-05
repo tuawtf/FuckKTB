@@ -8,7 +8,7 @@ import android.net.wifi.WifiManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.CaptivePortalClient
-import com.example.SmsReceiver
+import com.example.SmsCodeBus
 import com.example.data.UserPreferences
 import com.example.data.UserPreferencesRepository
 import com.example.util.PhoneUtils
@@ -165,7 +165,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun observeSmsEvents() {
         viewModelScope.launch {
-            SmsReceiver.smsEvents.collect { event ->
+            SmsCodeBus.smsEvents.collect { event ->
                 addLog(LogLevel.SUCCESS, "SMS Yakalandi! Gonderici: " + event.sender)
                 addLog(LogLevel.INFO, "Dogrulama Kodu: " + event.verificationCode)
 
@@ -325,7 +325,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         addLog(LogLevel.INFO, "Test SMS simulasyonu tetiklendi (Kod: " + mockCode + ")")
         val sender = "KUL.TUR.BKN"
         val body = "Dogrulama kodu: $mockCode Bu kodu kullanarak KTB Wifi hizmetinden yararlanabilirsiniz. B001"
-        SmsReceiver.simulateSmsArrival(sender, body, mockCode)
+        SmsCodeBus.simulateSmsArrival(sender, body, mockCode)
     }
 
     fun clearLogs() {

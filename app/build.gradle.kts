@@ -22,6 +22,20 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
+  flavorDimensions += "sms"
+
+  productFlavors {
+    create("sms") {
+      dimension = "sms"
+      buildConfigField("boolean", "SMS_PERMISSION_ENABLED", "true")
+    }
+    create("nosms") {
+      dimension = "sms"
+      applicationIdSuffix = ".nosms"
+      buildConfigField("boolean", "SMS_PERMISSION_ENABLED", "false")
+    }
+  }
+
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
   // and updating Android apps in AI Studio.
   signingConfigs {
@@ -137,7 +151,7 @@ dependencies {
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
-  implementation("com.google.android.gms:play-services-auth-api-phone:18.1.0")
+  add("nosmsImplementation", "com.google.android.gms:play-services-auth-api-phone:18.1.0")
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)

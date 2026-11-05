@@ -327,9 +327,9 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
                 onClick = {
                     if (uiState.step == PortalStep.IDLE || uiState.step == PortalStep.ERROR || uiState.step == PortalStep.SUCCESS) {
                         val activity = context as? MainActivity
-                        activity?.startSmsConsent()
+                        activity?.triggerSmsConsent()
                         viewModel.startConnectionFlow {
-                            activity?.startSmsConsent()
+                            activity?.triggerSmsConsent()
                         }
                     }
                 },

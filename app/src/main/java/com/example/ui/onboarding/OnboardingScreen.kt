@@ -91,12 +91,26 @@ import com.example.util.PhoneUtils
 import kotlin.math.PI
 import kotlin.math.sin
 
+enum class OnboardingStepType {
+    WELCOME,
+    SMS_PERMISSION,
+    PHONE_PERMISSION,
+    PHONE_NUMBER
+}
+
 /**
- * 3 Adimli Modern Onboarding Akisi (SMS User Consent API uyumlu)
+ * Modern Cok Adimli Onboarding Akisi
  *
- * Adim 1: Karsilama - "Fuck KTB" (%33 Progress, phone_mockup, "Basla" butonu)
- * Adim 2: Telefona Erisim - Telefon Izni (%66 Progress, phone_mockup3, "Simdilik atla" + Geri + "Izin Veriyorum")
- * Adim 3: Telefon Numarasi Belirleme (%100 Progress, Yerinde Maskeleme, Otomatik Doldurma Butonu, Islem Butonlari + Ozel Keypad)
+ * SMS Izinli Surum (BuildConfig.SMS_PERMISSION_ENABLED == true):
+ * - Adim 1: Karsilama - "Fuck KTB" (%25 Progress, phone_mockup, "Basla" butonu)
+ * - Adim 2: Mesajlara Erisim - SMS Izni (%50 Progress, phone_mockup2, "Izin Veriyorum")
+ * - Adim 3: Telefona Erisim - Telefon Izni (%75 Progress, phone_mockup3, "Simdilik atla" + "Izin Veriyorum")
+ * - Adim 4: Telefon Numarasi Belirleme (%100 Progress, Yerinde Maskeleme, Ozel Keypad)
+ *
+ * SMS Izinsiz Surum (BuildConfig.SMS_PERMISSION_ENABLED == false):
+ * - Adim 1: Karsilama - "Fuck KTB" (%33 Progress)
+ * - Adim 2: Telefona Erisim - Telefon Izni (%66 Progress)
+ * - Adim 3: Telefon Numarasi Belirleme (%100 Progress)
  *
  * SIFIR EMOJI KURALI: Kod ve metinlerde emoji kesinlikle kullanilmaz.
  */
@@ -108,16 +122,34 @@ fun OnboardingScreen(
     onComplete: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
-    var currentStep by remember { mutableIntStateOf(0) }
+
+    val activeSteps = remember {
+        if (com.example.BuildConfig.SMS_PERMISSION_ENABLED) {
+            listOf(
+                OnboardingStepType.WELCOME,
+                OnboardingStepType.SMS_PERMISSION,
+                OnboardingStepType.PHONE_PERMISSION,
+                OnboardingStepType.PHONE_NUMBER
+            )
+        } else {
+            listOf(
+                OnboardingStepType.WELCOME,
+                OnboardingStepType.PHONE_PERMISSION,
+                OnboardingStepType.PHONE_NUMBER
+            )
+        }
+    }
+
+    var currentStepIndex by remember { mutableIntStateOf(0) }
 
     // 10 basamakli telefon numarasini ayikla (basta '0' haric)
     var phoneDigits by remember {
         mutableStateOf(extractTenDigits(initialPhoneNumber))
     }
 
-    // Geri tusu kontrolu (Adim 1 ve 2'de bir onceki adima doner)
-    BackHandler(enabled = currentStep > 0) {
-        currentStep--
+    // Geri tusu kontrolu
+    BackHandler(enabled = currentStepIndex > 0) {
+        currentStepIndex--
     }
 
     // Renk Paleti (Koyu Antrasit / Lacivert Tema)
@@ -129,12 +161,8 @@ fun OnboardingScreen(
     val progressTrack = Color(0xFF262A34)
     val darkButtonBg = Color(0xFF1E232E)
 
-    // Dinamik Progress: 1. Adim: %33, 2. Adim: %66, 3. Adim: %100
-    val targetProgress = when (currentStep) {
-        0 -> 0.33f
-        1 -> 0.66f
-        else -> 1.0f
-    }
+    // Dinamik Progress
+    val targetProgress = (currentStepIndex + 1).toFloat() / activeSteps.size.toFloat()
 
     val animatedProgress by animateFloatAsState(
         targetValue = targetProgress,
@@ -142,21 +170,31 @@ fun OnboardingScreen(
         label = "progress_animation"
     )
 
-    // 2. Adim: Yalnizca Telefon Izinleri Launcher'i
+    // SMS Izinleri Launcher'i
+    val smsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        if (currentStepIndex < activeSteps.lastIndex) {
+            currentStepIndex++
+        }
+    }
+
+    // Telefon Izinleri Launcher'i
     val phonePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) {
-        // Izin verilirse cihazdan numarayi otomatik cek
         val detected = PhoneUtils.detectDevicePhoneNumber(context)
         if (!detected.isNullOrBlank()) {
             phoneDigits = extractTenDigits(detected)
         }
-        currentStep = 2
+        if (currentStepIndex < activeSteps.lastIndex) {
+            currentStepIndex++
+        }
     }
 
-    // 3. Adima (Numara Belirleme) gecildiginde numara bos ise SIM'den okumayi dene
-    LaunchedEffect(currentStep) {
-        if (currentStep == 2 && phoneDigits.isBlank()) {
+    // Numara Belirleme adimina gecildiginde numara bos ise SIM'den okumayi dene
+    LaunchedEffect(currentStepIndex) {
+        if (activeSteps[currentStepIndex] == OnboardingStepType.PHONE_NUMBER && phoneDigits.isBlank()) {
             val detected = PhoneUtils.detectDevicePhoneNumber(context)
             if (!detected.isNullOrBlank()) {
                 phoneDigits = extractTenDigits(detected)
@@ -190,7 +228,7 @@ fun OnboardingScreen(
 
         // 2. Cok Adimli Gecis Alani (AnimatedContent)
         AnimatedContent(
-            targetState = currentStep,
+            targetState = currentStepIndex,
             transitionSpec = {
                 if (targetState > initialState) {
                     (slideInHorizontally { it } + fadeIn()).togetherWith(slideOutHorizontally { -it } + fadeOut())
@@ -202,10 +240,9 @@ fun OnboardingScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-        ) { step ->
-            when (step) {
-                0 -> {
-                    // 1. Ekran: Giris / Karsilama ("Fuck KTB", phone_mockup, "Basla" butonu)
+        ) { stepIndex ->
+            when (activeSteps[stepIndex]) {
+                OnboardingStepType.WELCOME -> {
                     StepWelcome(
                         accentBlue = accentBlue,
                         textPrimary = textPrimary,
@@ -213,21 +250,46 @@ fun OnboardingScreen(
                         buttonText = buttonText,
                         onNext = {
                             onGetStartedClick()
-                            currentStep = 1
+                            if (currentStepIndex < activeSteps.lastIndex) {
+                                currentStepIndex++
+                            }
                         }
                     )
                 }
-                1 -> {
-                    // 2. Ekran: Sadece Telefon Izni ("Telefona Erisim", phone_mockup3, "Simdilik atla")
+                OnboardingStepType.SMS_PERMISSION -> {
+                    StepSmsPermission(
+                        accentBlue = accentBlue,
+                        textPrimary = textPrimary,
+                        textSecondary = textSecondary,
+                        buttonText = buttonText,
+                        darkButtonBg = darkButtonBg,
+                        onBack = {
+                            if (currentStepIndex > 0) currentStepIndex--
+                        },
+                        onGrantPermission = {
+                            smsPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.RECEIVE_SMS,
+                                    Manifest.permission.READ_SMS
+                                )
+                            )
+                        }
+                    )
+                }
+                OnboardingStepType.PHONE_PERMISSION -> {
                     StepPhonePermission(
                         accentBlue = accentBlue,
                         textPrimary = textPrimary,
                         textSecondary = textSecondary,
                         buttonText = buttonText,
                         darkButtonBg = darkButtonBg,
-                        onBack = { currentStep = 0 },
+                        onBack = {
+                            if (currentStepIndex > 0) currentStepIndex--
+                        },
                         onSkip = {
-                            currentStep = 2
+                            if (currentStepIndex < activeSteps.lastIndex) {
+                                currentStepIndex++
+                            }
                         },
                         onGrantPermission = {
                             val perms = mutableListOf<String>()
@@ -239,8 +301,7 @@ fun OnboardingScreen(
                         }
                     )
                 }
-                else -> {
-                    // 3. Ekran: Telefon Numarasi Belirleme Ekrani (%100 Progress + Ozel Keypad)
+                OnboardingStepType.PHONE_NUMBER -> {
                     StepPhoneNumberDetermination(
                         digits = phoneDigits,
                         accentBlue = accentBlue,
@@ -249,7 +310,9 @@ fun OnboardingScreen(
                         buttonText = buttonText,
                         darkButtonBg = darkButtonBg,
                         onDigitsChanged = { phoneDigits = it },
-                        onBack = { currentStep = 1 },
+                        onBack = {
+                            if (currentStepIndex > 0) currentStepIndex--
+                        },
                         onAutoFill = {
                             val detected = PhoneUtils.detectDevicePhoneNumber(context)
                             if (!detected.isNullOrBlank()) {
@@ -368,6 +431,145 @@ private fun StepWelcome(
                         tint = buttonText,
                         modifier = Modifier.size(20.dp)
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Mesajlara Erisim (SMS Izni) - Yalnizca SMS Izinli Flavor'da gosterilir
+ *
+ * Gorsel: R.drawable.phone_mockup2
+ * Baslik: "Mesajlara Erişim"
+ * Aciklama: "FKTB, Kültür Bakanlığında gelen mesajları yakalamak için SMS'lerinizi sadece kullanacağınız zaman tarayabilir."
+ * Butonlar: Sol dairesel geri butonu, Sag "Izin Veriyorum" butonu
+ */
+@Composable
+private fun StepSmsPermission(
+    accentBlue: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    buttonText: Color,
+    darkButtonBg: Color,
+    onBack: () -> Unit,
+    onGrantPermission: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Mockup Gorseli 2
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.phone_mockup2),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("onboarding_phone_mockup2")
+            )
+        }
+
+        // Alt Metinler ve Buton Alani
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset(y = (-40).dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Mesajlara Erişim",
+                color = textPrimary,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("step2_title")
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "FKTB, Kültür Bakanlığında gelen mesajları yakalamak için SMS'lerinizi sadece kullanacağınız zaman tarayabilir.",
+                color = textSecondary,
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .testTag("step2_description")
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Yatay Buton Satiri: Sol Geri Butonu + Sag Izin Veriyorum Butonu
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Sol: Dairesel Geri Butonu
+                Surface(
+                    onClick = onBack,
+                    shape = CircleShape,
+                    color = darkButtonBg,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .testTag("step2_back_button")
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Geri",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Sag: "Izin Veriyorum" Butonu
+                Button(
+                    onClick = onGrantPermission,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .testTag("step2_grant_permission_button"),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accentBlue,
+                        contentColor = buttonText
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "İzin Veriyorum",
+                            color = buttonText,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = buttonText,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }

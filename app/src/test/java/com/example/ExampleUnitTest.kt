@@ -25,7 +25,7 @@ class ExampleUnitTest {
         val messageBody = "Dogrulama kodu: 594586 Bu kodu kullanarak KTB Wifi hizmetinden yararlanabilirsiniz. B001"
         val sender = "KUL.TUR.BKN"
 
-        val code = SmsReceiver.extractVerificationCode(sender, messageBody)
+        val code = SmsCodeBus.extractVerificationCode(sender, messageBody)
         assertEquals("594586", code)
 
         // Case insensitivity & spaces
@@ -34,8 +34,8 @@ class ExampleUnitTest {
             "dogrulama kodu:  789012  Bu kodu kullanarak",
             "Dogrulama Kodu: 345678"
         )
-        assertEquals("123456", SmsReceiver.extractVerificationCode(sender, variations[0]))
-        assertEquals("789012", SmsReceiver.extractVerificationCode(sender, variations[1]))
-        assertEquals("345678", SmsReceiver.extractVerificationCode(sender, variations[2]))
+        assertEquals("123456", SmsCodeBus.extractVerificationCode(sender, variations[0]))
+        assertEquals("789012", SmsCodeBus.extractVerificationCode(sender, variations[1]))
+        assertEquals("345678", SmsCodeBus.extractVerificationCode(sender, variations[2]))
     }
 }

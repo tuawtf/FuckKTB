@@ -149,25 +149,26 @@ jobs:
           git diff app/build.gradle.kts
 
       - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest --continue
+        run: ./gradlew testSmsDebugUnitTest testNosmsDebugUnitTest --continue
 
-      - name: Build Signed Release APK
-        run: ./gradlew assembleRelease --stacktrace
+      - name: Build Signed Release APKs
+        run: ./gradlew assembleSmsRelease assembleNosmsRelease --stacktrace
         env:
           KEYSTORE_PATH: "my-upload-key.jks"
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
 
-      - name: Prepare Release Output Asset
+      - name: Prepare Release Output Assets
         run: |
           mkdir -p release-output
-          cp app/build/outputs/apk/release/*.apk "release-output/FKTB-v${{ env.VERSION_NAME }}-pre.apk"
+          cp app/build/outputs/apk/sms/release/*.apk "release-output/FKTB-v${{ env.VERSION_NAME }}-pre.apk"
+          cp app/build/outputs/apk/nosms/release/*.apk "release-output/FKTB-v${{ env.VERSION_NAME }}-nosms-pre.apk"
           ls -la release-output/
 
-      - name: Upload Release APK Artifact
+      - name: Upload Release APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: FKTB-v${{ env.VERSION_NAME }}-pre-APK
+          name: FKTB-v${{ env.VERSION_NAME }}-pre-APKs
           path: release-output/*.apk
           retention-days: 14
 
@@ -185,11 +186,16 @@ jobs:
             - Commit: ${{ github.sha }}
             - Dal: ${{ github.ref_name }}
 
-            İmzalı APK dosyası ekte yer almaktadır.
+            Sürüm Farkı:
+            - SMS izinli (eski): kod otomatik gelir.
+            - SMS izinsiz: Google Play Protect engeline takılmaz, kod için sistem onayı çıkar.
+
+            İmzalı APK dosyaları ekte yer almaktadır.
           prerelease: true
           draft: false
           generate_release_notes: true
           files: |
             release-output/FKTB-v${{ env.VERSION_NAME }}-pre.apk
+            release-output/FKTB-v${{ env.VERSION_NAME }}-nosms-pre.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
