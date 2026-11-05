@@ -182,7 +182,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     /**
      * 1. ADIM: "Baglan" butonuna basildiginda createSmsToken istegi atar.
      */
-    fun startConnectionFlow() {
+    fun startConnectionFlow(onBeforeRequest: (() -> Unit)? = null) {
         val currentPhone = _uiState.value.phoneNumber
         if (!PhoneUtils.isValidTurkishMobile(currentPhone)) {
             val error = "Gecerli bir cep telefonu numarasi gereklidir (Ornek: 05xx xxx xx xx)"
@@ -201,6 +201,8 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         addLog(LogLevel.INFO, "POST http://captive.kultur.gov.tr/users/createSmsToken (" + currentPhone + ")")
+
+        onBeforeRequest?.invoke()
 
         viewModelScope.launch {
             val result = client.createSmsToken(currentPhone)

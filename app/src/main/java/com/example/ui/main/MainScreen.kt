@@ -106,6 +106,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.MainActivity
 import com.example.ui.navigation.MainTab
 import com.example.ui.theme.StatusError
 import com.example.ui.theme.StatusInfo
@@ -320,11 +321,16 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
                 }
             }
 
+            val context = LocalContext.current
             // BUYUK MERKEZI BAGLAN BUTONU (FAB Benzeri Dikkat Cekici Card)
             Surface(
                 onClick = {
                     if (uiState.step == PortalStep.IDLE || uiState.step == PortalStep.ERROR || uiState.step == PortalStep.SUCCESS) {
-                        viewModel.startConnectionFlow()
+                        val activity = context as? MainActivity
+                        activity?.startSmsConsent()
+                        viewModel.startConnectionFlow {
+                            activity?.startSmsConsent()
+                        }
                     }
                 },
                 enabled = uiState.step != PortalStep.REQUESTING_SMS && uiState.step != PortalStep.VALIDATING,
