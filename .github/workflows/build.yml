@@ -1,22 +1,109 @@
-name: Android CI Build
+name: FKTB Pre-Release Build
 
 on:
   push:
     branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch: # GitHub UI uzerinden manuel calistirma imkani
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Sürüm adı (boş veya auto ise dinamik artırılır, örn: 1.0.1)'
+        required: false
+        default: 'auto'
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  build-and-prerelease:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Determine Pre-Release Version
+        id: version_step
+        env:
+          INPUT_VERSION_NAME: ${{ github.event.inputs.version_name || 'auto' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - << 'EOF' > version_info.txt
+          import json, os, re, sys
+          import urllib.request
+
+          input_version = os.environ.get("INPUT_VERSION_NAME", "auto").strip()
+          if input_version and input_version != "auto":
+              version_name = input_version.lstrip("v")
+          else:
+              repo = os.environ.get("GITHUB_REPOSITORY", "")
+              token = os.environ.get("GITHUB_TOKEN", "")
+              base_stable = "1.0"
+              stables = []
+              prereleases = []
+
+              if repo and token:
+                  try:
+                      url = f"https://api.github.com/repos/{repo}/releases?per_page=100"
+                      req = urllib.request.Request(url, headers={
+                          "Authorization": f"Bearer {token}",
+                          "Accept": "application/vnd.github.v3+json",
+                          "User-Agent": "GitHub-Actions"
+                      })
+                      with urllib.request.urlopen(req) as resp:
+                          releases = json.loads(resp.read().decode())
+                          for r in releases:
+                              tag = r.get("tag_name", "").lstrip("v").strip()
+                              if r.get("prerelease", False):
+                                  prereleases.append(tag)
+                              else:
+                                  stables.append(tag)
+                  except Exception as e:
+                      print(f"Warning: Could not fetch releases: {e}", file=sys.stderr)
+
+              # Kararlı sürümlerden en sonuncusunu bul (örn: 1.0, 1.1)
+              stable_versions = []
+              for s in stables:
+                  m = re.match(r"^(\d+)\.(\d+)$", s)
+                  if m:
+                      stable_versions.append((int(m.group(1)), int(m.group(2))))
+
+              if stable_versions:
+                  stable_versions.sort()
+                  latest_major, latest_minor = stable_versions[-1]
+                  current_base = f"{latest_major}.{latest_minor}"
+              else:
+                  current_base = base_stable
+
+              # Bu taban sürüm altındaki pre-release yama numaralarını bul (örn: 1.0.1, 1.0.2)
+              patch_numbers = []
+              pattern = re.compile(rf"^{re.escape(current_base)}\.(\d+)$")
+              for p in prereleases:
+                  m = pattern.match(p)
+                  if m:
+                      patch_numbers.append(int(m.group(1)))
+
+              next_patch = max(patch_numbers, default=0) + 1
+              version_name = f"{current_base}.{next_patch}"
+
+          print(version_name)
+          EOF
+
+          VERSION_NAME=$(cat version_info.txt | tr -d '\r\n')
+          VERSION_CODE=$(date +%s)
+
+          echo "Calculated VERSION_NAME: $VERSION_NAME"
+          echo "Calculated VERSION_CODE: $VERSION_CODE"
+
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -28,74 +115,81 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Prepare Environment & Keystore
+      - name: Prepare Keystore & Environment
         run: |
-          # Gradlew calistirma izni ver
           chmod +x gradlew
 
-          # .env dosyasi yoksa sablondan olustur
+          # .env dosyası hazırlığı
           if [ ! -f ".env" ] && [ -f ".env.example" ]; then
             cp .env.example .env
           elif [ ! -f ".env" ]; then
             touch .env
           fi
 
-          # Debug imzalama anahtarini hazirla
-          if [ -f "debug.keystore.base64" ]; then
-            echo "Decoding debug.keystore from base64..."
-            base64 -d debug.keystore.base64 > debug.keystore
-          elif [ ! -f "debug.keystore" ]; then
-            echo "Generating fallback debug.keystore..."
-            keytool -genkey -v -keystore debug.keystore -storepass android \
-              -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
-              -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          # Release Keystore hazırlığı
+          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
+          elif [ ! -f "my-upload-key.jks" ]; then
+            echo "Generating fallback upload keystore..."
+            keytool -genkey -v -keystore my-upload-key.jks -storepass "${STORE_PASSWORD:-android}" \
+              -alias upload -keypass "${KEY_PASSWORD:-android}" -keyalg RSA -keysize 2048 \
+              -validity 10000 -dname "CN=FKTB Release,O=FKTB,C=TR"
           fi
+
+          # Keystore dosyasını hem kök dizinde hem de app modülünde hazır bulundur
+          cp my-upload-key.jks app/my-upload-key.jks 2>/dev/null || true
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Apply Versioning to build.gradle.kts
+        run: |
+          sed -i "s/versionCode = .*/versionCode = ${{ env.VERSION_CODE }}/" app/build.gradle.kts
+          sed -i "s/versionName = .*/versionName = \"${{ env.VERSION_NAME }}\"/" app/build.gradle.kts
+          git diff app/build.gradle.kts
 
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --continue
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Build Signed Release APK
+        run: ./gradlew assembleRelease --stacktrace
+        env:
+          KEYSTORE_PATH: "my-upload-key.jks"
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
 
-      - name: Upload Debug APK Artifact
+      - name: Prepare Release Output Asset
+        run: |
+          mkdir -p release-output
+          cp app/build/outputs/apk/release/*.apk "release-output/FKTB-v${{ env.VERSION_NAME }}-pre.apk"
+          ls -la release-output/
+
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KTB-WiFi-Debug-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: FKTB-v${{ env.VERSION_NAME }}-pre-APK
+          path: release-output/*.apk
           retention-days: 14
 
-      - name: Upload Test Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: unit-test-reports
-          path: app/build/reports/tests/testDebugUnitTest/
-          retention-days: 7
-
-      - name: Prepare Release Assets
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        run: |
-          mkdir -p release-assets
-          cp app/build/outputs/apk/debug/*.apk release-assets/KTB-WiFi-Build-${{ github.run_number }}.apk
-
-      - name: Publish Pre-Release to GitHub
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      - name: Publish Pre-Release to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: pre-v1.0.0-b${{ github.run_number }}
-          name: "KTB Wi-Fi Pre-Release (Build #${{ github.run_number }})"
+          tag_name: "v${{ env.VERSION_NAME }}"
+          name: "FKTB v${{ env.VERSION_NAME }} (Pre-Release)"
           body: |
-            KTB Kutuphane Wi-Fi Giris Yardimcisi Otomatik Pre-Release
+            FKTB Otomatik İmzalı Pre-Release Sürümü
 
-            - Derleme Numarasi: ${{ github.run_number }}
+            - Sürüm Adı: v${{ env.VERSION_NAME }}
+            - Sürüm Kodu (Timestamp): ${{ env.VERSION_CODE }}
+            - Derleme Numarası: #${{ github.run_number }}
             - Commit: ${{ github.sha }}
             - Dal: ${{ github.ref_name }}
 
-            Derlenen APK dosyasi asagida yer almaktadir.
+            İmzalı APK dosyası ekte yer almaktadır.
           prerelease: true
           draft: false
           generate_release_notes: true
           files: |
-            release-assets/*.apk
+            release-output/FKTB-v${{ env.VERSION_NAME }}-pre.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

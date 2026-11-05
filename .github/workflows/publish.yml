@@ -1,0 +1,196 @@
+name: FKTB Stable Release Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Kararlı Sürüm Adı (boş veya auto ise majör/minör otomatik artırılır, örn: 1.1)'
+        required: false
+        default: 'auto'
+      version_code:
+        description: 'Sürüm Kodu (boş veya auto ise timestamp kullanılır)'
+        required: false
+        default: 'auto'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-stable:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Determine Stable Release Version
+        id: version_step
+        env:
+          INPUT_VERSION_NAME: ${{ github.event.inputs.version_name || 'auto' }}
+          INPUT_VERSION_CODE: ${{ github.event.inputs.version_code || 'auto' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - << 'EOF' > version_info.txt
+          import json, os, re, sys
+          import urllib.request
+
+          input_version = os.environ.get("INPUT_VERSION_NAME", "auto").strip()
+          if input_version and input_version != "auto":
+              version_name = input_version.lstrip("v")
+          else:
+              repo = os.environ.get("GITHUB_REPOSITORY", "")
+              token = os.environ.get("GITHUB_TOKEN", "")
+              stables = []
+
+              if repo and token:
+                  try:
+                      url = f"https://api.github.com/repos/{repo}/releases?per_page=100"
+                      req = urllib.request.Request(url, headers={
+                          "Authorization": f"Bearer {token}",
+                          "Accept": "application/vnd.github.v3+json",
+                          "User-Agent": "GitHub-Actions"
+                      })
+                      with urllib.request.urlopen(req) as resp:
+                          releases = json.loads(resp.read().decode())
+                          for r in releases:
+                              # Yalnızca kararlı (prerelease == False) sürümleri filtrele
+                              if not r.get("prerelease", False):
+                                  tag = r.get("tag_name", "").lstrip("v").strip()
+                                  stables.append(tag)
+                  except Exception as e:
+                      print(f"Warning: Could not fetch releases: {e}", file=sys.stderr)
+
+              stable_versions = []
+              for s in stables:
+                  m = re.match(r"^(\d+)\.(\d+)$", s)
+                  if m:
+                      stable_versions.append((int(m.group(1)), int(m.group(2))))
+
+              if not stable_versions:
+                  # Hiç kararlı sürüm yoksa taban sürüm 1.0 olarak başlat
+                  version_name = "1.0"
+              else:
+                  stable_versions.sort()
+                  last_major, last_minor = stable_versions[-1]
+                  # 1.0 -> 1.1 ... 1.9'dan sonra 2.0
+                  if last_minor >= 9:
+                      next_major = last_major + 1
+                      next_minor = 0
+                  else:
+                      next_major = last_major
+                      next_minor = last_minor + 1
+                  version_name = f"{next_major}.{next_minor}"
+
+          print(version_name)
+          EOF
+
+          VERSION_NAME=$(cat version_info.txt | tr -d '\r\n')
+
+          INPUT_CODE="${{ github.event.inputs.version_code }}"
+          if [ -n "$INPUT_CODE" ] && [ "$INPUT_CODE" != "auto" ]; then
+            VERSION_CODE="$INPUT_CODE"
+          else
+            VERSION_CODE=$(date +%s)
+          fi
+
+          echo "Calculated Stable VERSION_NAME: $VERSION_NAME"
+          echo "Calculated Stable VERSION_CODE: $VERSION_CODE"
+
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare Keystore & Environment
+        run: |
+          chmod +x gradlew
+
+          # .env dosyası hazırlığı
+          if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+            cp .env.example .env
+          elif [ ! -f ".env" ]; then
+            touch .env
+          fi
+
+          # Release Keystore hazırlığı
+          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
+          elif [ ! -f "my-upload-key.jks" ]; then
+            echo "Generating fallback upload keystore..."
+            keytool -genkey -v -keystore my-upload-key.jks -storepass "${STORE_PASSWORD:-android}" \
+              -alias upload -keypass "${KEY_PASSWORD:-android}" -keyalg RSA -keysize 2048 \
+              -validity 10000 -dname "CN=FKTB Release,O=FKTB,C=TR"
+          fi
+
+          # Keystore dosyasını hem kök dizinde hem de app modülünde hazır bulundur
+          cp my-upload-key.jks app/my-upload-key.jks 2>/dev/null || true
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Apply Versioning to build.gradle.kts
+        run: |
+          sed -i "s/versionCode = .*/versionCode = ${{ env.VERSION_CODE }}/" app/build.gradle.kts
+          sed -i "s/versionName = .*/versionName = \"${{ env.VERSION_NAME }}\"/" app/build.gradle.kts
+          git diff app/build.gradle.kts
+
+      - name: Run Unit Tests
+        run: ./gradlew testDebugUnitTest --continue
+
+      - name: Build Signed Release APK
+        run: ./gradlew assembleRelease --stacktrace
+        env:
+          KEYSTORE_PATH: "my-upload-key.jks"
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
+
+      - name: Prepare Release Output Asset
+        run: |
+          mkdir -p release-output
+          cp app/build/outputs/apk/release/*.apk "release-output/FKTB-v${{ env.VERSION_NAME }}.apk"
+          ls -la release-output/
+
+      - name: Upload Stable APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FKTB-v${{ env.VERSION_NAME }}-APK
+          path: release-output/*.apk
+          retention-days: 30
+
+      - name: Publish Stable Release to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ env.VERSION_NAME }}"
+          name: "FKTB v${{ env.VERSION_NAME }}"
+          body: |
+            FKTB Kararlı Sürüm (Stable Release)
+
+            - Sürüm: v${{ env.VERSION_NAME }}
+            - Sürüm Kodu: ${{ env.VERSION_CODE }}
+            - Derleme Numarası: #${{ github.run_number }}
+            - Commit: ${{ github.sha }}
+
+            Doğrulanmış ve imzalı APK dosyası ekte sunulmuştur.
+          prerelease: false
+          draft: false
+          generate_release_notes: true
+          files: |
+            release-output/FKTB-v${{ env.VERSION_NAME }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
