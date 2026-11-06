@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import android.os.Build
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -39,6 +40,9 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_LATEST_BETA_VERSION = stringPreferencesKey("latest_beta_version")
         val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         val KEY_COLOR_PALETTE = stringPreferencesKey("color_palette")
+
+        private val VALID_THEME_MODES = setOf("SYSTEM", "LIGHT", "DARK")
+        private val VALID_PALETTES = setOf("DYNAMIC", "OCEAN", "SAKURA", "MACHA", "ESPRESSO", "LAVENDER", "AMOLED")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -57,8 +61,22 @@ class UserPreferencesRepository(private val context: Context) {
             val checkUpdatesOnLaunch = preferences[KEY_CHECK_UPDATES_ON_LAUNCH] ?: true
             val latestStableVersion = preferences[KEY_LATEST_STABLE_VERSION].orEmpty()
             val latestBetaVersion = preferences[KEY_LATEST_BETA_VERSION].orEmpty()
-            val themeMode = preferences[KEY_THEME_MODE] ?: "DARK"
-            val colorPalette = preferences[KEY_COLOR_PALETTE] ?: "OCEAN"
+
+            var rawThemeMode = preferences[KEY_THEME_MODE] ?: "DARK"
+            if (rawThemeMode !in VALID_THEME_MODES) {
+                rawThemeMode = "DARK"
+            }
+
+            var rawPalette = preferences[KEY_COLOR_PALETTE] ?: "OCEAN"
+            if (rawPalette !in VALID_PALETTES) {
+                rawPalette = "OCEAN"
+            }
+
+            // API 31 alti ise DYNAMIC palet OCEAN'a düşer
+            if (rawPalette == "DYNAMIC" && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                rawPalette = "OCEAN"
+            }
+
             UserPreferences(
                 phoneNumber = phoneNumber,
                 isOnboardingCompleted = isOnboardingCompleted,
@@ -67,8 +85,8 @@ class UserPreferencesRepository(private val context: Context) {
                 checkUpdatesOnLaunch = checkUpdatesOnLaunch,
                 latestStableVersion = latestStableVersion,
                 latestBetaVersion = latestBetaVersion,
-                themeMode = themeMode,
-                colorPalette = colorPalette
+                themeMode = rawThemeMode,
+                colorPalette = rawPalette
             )
         }
 
@@ -115,14 +133,19 @@ class UserPreferencesRepository(private val context: Context) {
     }
 
     suspend fun setThemeMode(mode: String) {
+        val safeMode = if (mode in VALID_THEME_MODES) mode else "DARK"
         context.dataStore.edit { preferences ->
-            preferences[KEY_THEME_MODE] = mode
+            preferences[KEY_THEME_MODE] = safeMode
         }
     }
 
     suspend fun setColorPalette(palette: String) {
+        var safePalette = if (palette in VALID_PALETTES) palette else "OCEAN"
+        if (safePalette == "DYNAMIC" && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            safePalette = "OCEAN"
+        }
         context.dataStore.edit { preferences ->
-            preferences[KEY_COLOR_PALETTE] = palette
+            preferences[KEY_COLOR_PALETTE] = safePalette
         }
     }
 

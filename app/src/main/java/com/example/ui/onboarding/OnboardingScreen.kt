@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.SimCard
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -74,6 +75,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -82,7 +84,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -102,20 +103,7 @@ enum class OnboardingStepType {
 }
 
 /**
- * Modern Cok Adimli Onboarding Akisi
- *
- * SMS Izinli Surum (BuildConfig.SMS_PERMISSION_ENABLED == true):
- * - Adim 1: Karsilama - "Fuck KTB" (%25 Progress, phone_mockup, "Basla" butonu)
- * - Adim 2: Mesajlara Erisim - SMS Izni (%50 Progress, phone_mockup2, "Izin Veriyorum")
- * - Adim 3: Telefona Erisim - Telefon Izni (%75 Progress, phone_mockup3, "Simdilik atla" + "Izin Veriyorum")
- * - Adim 4: Telefon Numarasi Belirleme (%100 Progress, Yerinde Maskeleme, Ozel Keypad)
- *
- * SMS Izinsiz Surum (BuildConfig.SMS_PERMISSION_ENABLED == false):
- * - Adim 1: Karsilama - "Fuck KTB" (%33 Progress)
- * - Adim 2: Telefona Erisim - Telefon Izni (%66 Progress)
- * - Adim 3: Telefon Numarasi Belirleme (%100 Progress)
- *
- * SIFIR EMOJI KURALI: Kod ve metinlerde emoji kesinlikle kullanilmaz.
+ * Modern Çok Adımlı Onboarding Akışı (Material 3 Dinamik Temalı)
  */
 @Composable
 fun OnboardingScreen(
@@ -145,24 +133,24 @@ fun OnboardingScreen(
 
     var currentStepIndex by remember { mutableIntStateOf(0) }
 
-    // 10 basamakli telefon numarasini ayikla (basta '0' haric)
+    // 10 basamaklı telefon numarasını ayıkla (başta '0' hariç)
     var phoneDigits by remember {
         mutableStateOf(extractTenDigits(initialPhoneNumber))
     }
 
-    // Geri tusu kontrolu
+    // Geri tuşu kontrolü
     BackHandler(enabled = currentStepIndex > 0) {
         currentStepIndex--
     }
 
-    // Renk Paleti (Koyu Antrasit / Lacivert Tema)
-    val backgroundColor = Color(0xFF0D0F14)
-    val accentBlue = Color(0xFF9EC5EA)
-    val textPrimary = Color(0xFFFFFFFF)
-    val textSecondary = Color(0xFF8E95A5)
-    val buttonText = Color(0xFF1B2A3B)
-    val progressTrack = Color(0xFF262A34)
-    val darkButtonBg = Color(0xFF1E232E)
+    // Renk Paleti (MaterialTheme.colorScheme Rollerinden Alınır)
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val accentBlue = MaterialTheme.colorScheme.primary
+    val textPrimary = MaterialTheme.colorScheme.onBackground
+    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
+    val buttonText = MaterialTheme.colorScheme.onPrimary
+    val progressTrack = MaterialTheme.colorScheme.outlineVariant
+    val darkButtonBg = MaterialTheme.colorScheme.surfaceContainerHigh
 
     // Dinamik Progress
     val targetProgress = (currentStepIndex + 1).toFloat() / activeSteps.size.toFloat()
@@ -173,7 +161,7 @@ fun OnboardingScreen(
         label = "progress_animation"
     )
 
-    // SMS Izinleri Launcher'i
+    // SMS İzinleri Launcher'ı
     val smsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) {
@@ -182,7 +170,7 @@ fun OnboardingScreen(
         }
     }
 
-    // Telefon Izinleri Launcher'i
+    // Telefon İzinleri Launcher'ı
     val phonePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) {
@@ -195,7 +183,7 @@ fun OnboardingScreen(
         }
     }
 
-    // Numara Belirleme adimina gecildiginde numara bos ise SIM'den okumayi dene
+    // Numara Belirleme adımına geçildiğinde numara boş ise SIM'den okumayı dene
     LaunchedEffect(currentStepIndex) {
         if (activeSteps[currentStepIndex] == OnboardingStepType.PHONE_NUMBER && phoneDigits.isBlank()) {
             val detected = PhoneUtils.detectDevicePhoneNumber(context)
@@ -215,7 +203,7 @@ fun OnboardingScreen(
             .testTag("onboarding_screen"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 1. Ust Bolum: Dinamik Hareketli Sinus Egrisi Progress Bar
+        // 1. Üst Bölüm: Dinamik Hareketli Sinüs Eğrisi Progress Bar
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -229,7 +217,7 @@ fun OnboardingScreen(
             )
         }
 
-        // 2. Cok Adimli Gecis Alani (AnimatedContent)
+        // 2. Çok Adımlı Geçiş Alanı (AnimatedContent)
         AnimatedContent(
             targetState = currentStepIndex,
             transitionSpec = {
@@ -333,14 +321,6 @@ fun OnboardingScreen(
     }
 }
 
-/**
- * 1. Adim: Karsilama Ekrani
- *
- * Gorsel: R.drawable.phone_mockup
- * Baslik: "Fuck KTB"
- * Aciklama: "Kütüphane Wi-Fi ağına saniyeler içinde, SMS bekleme çilesi olmadan otomatik ve güvenli bir şekilde bağlanın."
- * Buton: Tam genislikte "Basla" butonu ve saga ok ikonu
- */
 @Composable
 private fun StepWelcome(
     accentBlue: Color,
@@ -354,7 +334,6 @@ private fun StepWelcome(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Mockup Gorseli 1
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -371,7 +350,6 @@ private fun StepWelcome(
             )
         }
 
-        // Alt Bilgi ve Buton: Resmin alt degrade kismiyla hafifce cakismasini saglamak icin yukari cekildi
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -444,14 +422,6 @@ private fun StepWelcome(
     }
 }
 
-/**
- * Mesajlara Erisim (SMS Izni) - Yalnizca SMS Izinli Flavor'da gosterilir
- *
- * Gorsel: R.drawable.phone_mockup2
- * Baslik: "Mesajlara Erişim"
- * Aciklama: "FKTB, Kültür Bakanlığında gelen mesajları yakalamak için SMS'lerinizi sadece kullanacağınız zaman tarayabilir."
- * Butonlar: Sol dairesel geri butonu, Sag "Izin Veriyorum" butonu
- */
 @Composable
 private fun StepSmsPermission(
     accentBlue: Color,
@@ -467,7 +437,6 @@ private fun StepSmsPermission(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Mockup Gorseli 2
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -484,7 +453,6 @@ private fun StepSmsPermission(
             )
         }
 
-        // Alt Metinler ve Buton Alani
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -518,13 +486,11 @@ private fun StepSmsPermission(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Yatay Buton Satiri: Sol Geri Butonu + Sag Izin Veriyorum Butonu
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Sol: Dairesel Geri Butonu
                 Surface(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -543,13 +509,12 @@ private fun StepSmsPermission(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Geri",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(20.dp)
                         )
                     }
                 }
 
-                // Sag: "Izin Veriyorum" Butonu
                 Button(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -590,15 +555,6 @@ private fun StepSmsPermission(
     }
 }
 
-/**
- * 2. Adim: Telefona Erisim (Sadece Telefon Izni)
- *
- * Gorsel: R.drawable.phone_mockup3
- * Baslik: "Telefona Erişim"
- * Aciklama: "FKTB, Telefon numaranızı siz daha girmeden doldurur. Sadece ilk açılışta bu izni ister."
- * "Simdilik atla" Butonu: Aciklama metninin altinda hap biciminde
- * Alt Butonlar: Sol dairesel geri butonu, Sag "Izin Veriyorum" butonu
- */
 @Composable
 private fun StepPhonePermission(
     accentBlue: Color,
@@ -615,7 +571,6 @@ private fun StepPhonePermission(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Mockup Gorseli 3
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -632,7 +587,6 @@ private fun StepPhonePermission(
             )
         }
 
-        // Alt Metinler, "Simdilik atla" ve Yatay Buton Alani
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -666,7 +620,6 @@ private fun StepPhonePermission(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // "Simdilik atla" Hap Butonu (Açıklamanın hemen altında)
             Surface(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -691,13 +644,11 @@ private fun StepPhonePermission(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Yatay Buton Satiri: Sol Geri Butonu + Sag Izin Veriyorum Butonu
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Sol: Dairesel Geri Butonu (1. adima doner)
                 Surface(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -716,13 +667,12 @@ private fun StepPhonePermission(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Geri",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(20.dp)
                         )
                     }
                 }
 
-                // Sag: "Izin Veriyorum" Butonu
                 Button(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -763,16 +713,6 @@ private fun StepPhonePermission(
     }
 }
 
-/**
- * 3. Adim: Telefon Numarasi Belirleme Ekrani (%100 Progress + Ozel Material 3 Sayisal Tus Takimi)
- *
- * Hiyerarsi:
- * 1. Ust Bolum: Telefon Ikonu + Baslik ("Telefon Numaranı Ekle") + Aciklama
- * 2. Orta Giris Alani: Telefon numarasi giris kutusu + Otomatik doldurma butonu
- * 3. Esnek Bosluk
- * 4. Islem Butonlari (Row): "Geri" ve "Bitir" butonlari (Keypad'in HEMEN USTUNDE)
- * 5. Ozel Sayisal Tus Takimi (Keypad): 4 satir x 3 sutun
- */
 @Composable
 private fun StepPhoneNumberDetermination(
     digits: String,
@@ -793,7 +733,6 @@ private fun StepPhoneNumberDetermination(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 1. Ust Bolum: Telefon Ikonu + Baslik + Aciklama
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -845,18 +784,16 @@ private fun StepPhoneNumberDetermination(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // 2. Orta Giris Alani: Soldaki Giris Kutusu + Sagdaki Otomatik Doldurma Butonu
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Soldaki Ana Giris Kutusu (Card / Box)
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .height(66.dp)
-                    .background(Color(0xFF161A22), RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(20.dp))
                     .padding(horizontal = 12.dp)
                     .testTag("step4_phone_input_box"),
                 contentAlignment = Alignment.CenterStart
@@ -865,7 +802,6 @@ private fun StepPhoneNumberDetermination(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // En solda Material3 SimCard Ikonu
                     Box(
                         modifier = Modifier
                             .size(34.dp)
@@ -882,7 +818,6 @@ private fun StepPhoneNumberDetermination(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    // Ust etiket ve Yerinde Maskelenmis Numara Alani
                     Column(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.Center
@@ -897,7 +832,11 @@ private fun StepPhoneNumberDetermination(
                         Spacer(modifier = Modifier.height(2.dp))
 
                         Text(
-                            text = buildMaskedPhoneAnnotatedString(digits),
+                            text = buildMaskedPhoneAnnotatedString(
+                                digits = digits,
+                                activeColor = MaterialTheme.colorScheme.onSurface,
+                                placeholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            ),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 15.5.sp,
                             letterSpacing = 0.sp,
@@ -910,7 +849,6 @@ private fun StepPhoneNumberDetermination(
                 }
             }
 
-            // Sagdaki Otomatik Doldurma Butonu (Numara henuz 10 hane degilse gorunur)
             AnimatedVisibility(
                 visible = !isValid,
                 enter = fadeIn() + expandHorizontally(),
@@ -922,7 +860,7 @@ private fun StepPhoneNumberDetermination(
                         onAutoFill()
                     },
                     shape = RoundedCornerShape(20.dp),
-                    color = Color(0xFF161A22),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
                     modifier = Modifier
                         .size(66.dp)
                         .testTag("step4_auto_fill_button")
@@ -950,10 +888,8 @@ private fun StepPhoneNumberDetermination(
             }
         }
 
-        // Esnek bosluk
         Spacer(modifier = Modifier.weight(1f))
 
-        // 3. Islem Butonlari Satiri: Sol Geri Butonu + Sag "Bitir" Butonu (Keypad'in HEMEN USTUNDE)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -961,7 +897,6 @@ private fun StepPhoneNumberDetermination(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Sol: Dairesel Geri Butonu (2. adima doner)
             Surface(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -980,13 +915,12 @@ private fun StepPhoneNumberDetermination(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Geri",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(20.dp)
                     )
                 }
             }
 
-            // Sag: "Bitir" Butonu (weight(1f), 54.dp, 10 hane tamamlandiginda aktif)
             Button(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -1027,7 +961,6 @@ private fun StepPhoneNumberDetermination(
             }
         }
 
-        // 4. Ozel Material 3 Sayisal Tus Takimi (Keypad) - Ekranin en altinda
         NumericKeypad(
             darkButtonBg = darkButtonBg,
             textSecondary = textSecondary,
@@ -1051,9 +984,6 @@ private fun StepPhoneNumberDetermination(
     }
 }
 
-/**
- * Keypad tusu tanimi
- */
 private data class KeypadItem(
     val digit: String = "",
     val letters: String = "",
@@ -1084,9 +1014,6 @@ private val keypadRows = listOf(
     )
 )
 
-/**
- * Ozel Material 3 Sayisal Tus Takimi (4 satir x 3 sutun)
- */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NumericKeypad(
@@ -1110,7 +1037,6 @@ private fun NumericKeypad(
                 rowItems.forEach { item ->
                     when {
                         item.isEmpty -> {
-                            // 4. Satir, 1. Sutun: Bos alan
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -1118,7 +1044,6 @@ private fun NumericKeypad(
                             )
                         }
                         item.isBackspace -> {
-                            // 4. Satir, 3. Sutun: Silme (Backspace) Tusu
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
                                 color = darkButtonBg,
@@ -1145,14 +1070,13 @@ private fun NumericKeypad(
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.Backspace,
                                         contentDescription = "Sil",
-                                        tint = Color.White,
+                                        tint = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }
                         }
                         else -> {
-                            // Rakam ve Harf Tusu
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
                                 color = darkButtonBg,
@@ -1173,7 +1097,7 @@ private fun NumericKeypad(
                                 ) {
                                     Text(
                                         text = item.digit,
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         fontSize = 22.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
@@ -1196,18 +1120,12 @@ private fun NumericKeypad(
     }
 }
 
-/**
- * '0 000 000 00 00' yerinde maskeleme formatlayicisi.
- * Basindaki '0 ' sabittir.
- * Girilen basamaklar beyaz (#FFFFFF), kalan sifirlar soluk gri (#4A5060) olarak gosterilir.
- */
 private fun buildMaskedPhoneAnnotatedString(
     digits: String,
-    activeColor: Color = Color.White,
-    placeholderColor: Color = Color(0xFF4A5060)
+    activeColor: Color,
+    placeholderColor: Color
 ): AnnotatedString {
     return buildAnnotatedString {
-        // Sabit baslangic '0 '
         withStyle(
             SpanStyle(
                 color = activeColor,
@@ -1217,7 +1135,6 @@ private fun buildMaskedPhoneAnnotatedString(
             append("0 ")
         }
 
-        // 10 basamak: 3 hane + bosluk + 3 hane + bosluk + 2 hane + bosluk + 2 hane
         for (i in 0 until 10) {
             if (i == 3 || i == 6 || i == 8) {
                 val spaceColor = if (i <= digits.length) activeColor else placeholderColor
@@ -1254,9 +1171,6 @@ private fun buildMaskedPhoneAnnotatedString(
     }
 }
 
-/**
- * Gelen telefon numarasindan 10 basamakli GSM numarasini ayiklar (basta '0' ve '90' haric).
- */
 private fun extractTenDigits(rawInput: String): String {
     val digitsOnly = rawInput.filter { it.isDigit() }
     return when {
@@ -1268,11 +1182,6 @@ private fun extractTenDigits(rawInput: String): String {
     }
 }
 
-/**
- * Ustte yer alan soluk zeminli ve dalgalanan sinus egrili progress bar.
- * - Arka plan: Soluk duz cizgi ve sag ucunda kucuk nokta (#262A34).
- * - Aktif kisim: Surekli akan yumusak sinus dalgasi egrisi (#9EC5EA).
- */
 @Composable
 fun UndulatingProgressBar(
     progress: Float,
@@ -1302,7 +1211,6 @@ fun UndulatingProgressBar(
         val trackStrokeWidth = 2.dp.toPx()
         val dotRadius = 2.5.dp.toPx()
 
-        // 1. Arka Plan: Duz gri cizgi (#262A34)
         drawLine(
             color = trackColor,
             start = Offset(x = 0f, y = midY),
@@ -1311,14 +1219,12 @@ fun UndulatingProgressBar(
             cap = StrokeCap.Round
         )
 
-        // En sagdaki minik nokta (dot) (#262A34)
         drawCircle(
             color = trackColor,
             radius = dotRadius,
             center = Offset(x = totalWidth - dotRadius, y = midY)
         )
 
-        // 2. Aktif Kisim: Surekli Akan Sinus Egrisi
         val clampedProgress = progress.coerceIn(0f, 1f)
         val activeWidth = totalWidth * clampedProgress
 
@@ -1333,7 +1239,6 @@ fun UndulatingProgressBar(
             var x = 0f
             val step = 1.5f
             while (x <= activeWidth) {
-                // Sinus egrisinin cizgiye yumusak baglanmasi icin uclarda sonumleme (windowing)
                 val normalizedX = (x / activeWidth).coerceIn(0f, 1f)
                 val window = sin(PI * normalizedX).toFloat()
                 val y = midY + amplitude * window * sin(frequency * x - phase)

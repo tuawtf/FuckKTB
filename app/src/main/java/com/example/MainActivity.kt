@@ -8,6 +8,7 @@ import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -17,6 +18,7 @@ import com.example.ui.main.MainScreen
 import com.example.ui.onboarding.OnboardingScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.PortalViewModel
+
 class MainActivity : ComponentActivity() {
 
     private val viewModel: PortalViewModel by viewModels()
@@ -35,7 +37,10 @@ class MainActivity : ComponentActivity() {
                 themeMode = userPrefs.themeMode,
                 colorPalette = userPrefs.colorPalette
             ) {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
                     AppRoot(viewModel = viewModel)
                 }
             }
