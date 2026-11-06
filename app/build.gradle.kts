@@ -106,6 +106,17 @@ secrets {
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
 
+// AI Studio emulator preview expects outputs/apk/debug/app-debug.apk
+tasks.register<Copy>("copyDebugApkForEmulator") {
+  from(layout.buildDirectory.file("outputs/apk/sms/debug/app-sms-debug.apk"))
+  into(layout.buildDirectory.dir("outputs/apk/debug"))
+  rename { "app-debug.apk" }
+}
+
+tasks.matching { it.name in listOf("assembleDebug", "assembleSmsDebug", "packageSmsDebug") }.configureEach {
+  finalizedBy("copyDebugApkForEmulator")
+}
+
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {

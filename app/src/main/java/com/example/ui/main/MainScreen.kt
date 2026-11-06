@@ -112,6 +112,7 @@ import com.example.ui.theme.StatusError
 import com.example.ui.theme.StatusInfo
 import com.example.ui.theme.StatusSuccess
 import com.example.ui.theme.StatusWarning
+import com.example.ui.theme.UnboundedFontFamily
 import com.example.ui.viewmodel.LogLevel
 import com.example.ui.viewmodel.PortalStep
 import com.example.ui.viewmodel.PortalViewModel
@@ -126,6 +127,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TopAppBar
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 
@@ -137,26 +139,13 @@ fun MainScreen(
     var selectedTab by remember { mutableStateOf(MainTab.HOME) }
     val uiState by viewModel.uiState.collectAsState()
     val userPrefs by viewModel.userPreferences.collectAsState()
-    var showMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopBarSection(
-                title = selectedTab.title,
-                onMenuClick = { showMenu = true },
-                showMenu = showMenu,
-                onDismissMenu = { showMenu = false },
-                onResetOnboarding = {
-                    showMenu = false
-                    viewModel.resetOnboarding()
-                    onResetOnboarding()
-                },
-                onClearLogs = {
-                    showMenu = false
-                    viewModel.clearLogs()
-                }
+                title = selectedTab.title
             )
         },
         bottomBar = {
@@ -1035,64 +1024,36 @@ private fun ConnectionsTabContent() {
 }
 
 // -------------------------------------------------------------
-// EKRAN USTU BUYUK BASLIK (TOP BAR)
+// EKRAN USTU BUYUK BASLIK (SOLDA, UNBOUNDED FONT ILE)
 // -------------------------------------------------------------
 @Composable
 private fun TopBarSection(
-    title: String,
-    onMenuClick: () -> Unit,
-    showMenu: Boolean,
-    onDismissMenu: () -> Unit,
-    onResetOnboarding: () -> Unit,
-    onClearLogs: () -> Unit
+    title: String
 ) {
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 8.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
-        Text(
-            text = title,
-            color = Color.White,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = (-0.5).sp,
-            modifier = Modifier.testTag("screen_top_title")
-        )
-
-        Box {
-            IconButton(
-                onClick = onMenuClick,
-                modifier = Modifier
-                    .size(40.dp)
-                    .testTag("top_bar_more_menu_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "Daha Fazla",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = onDismissMenu
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Kurulum Sihirbazını Sıfırla") },
-                    onClick = onResetOnboarding,
-                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
-                )
-                DropdownMenuItem(
-                    text = { Text("Aktivite Günlüğünü Temizle") },
-                    onClick = onClearLogs,
-                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) }
-                )
-            }
+        AnimatedContent(
+            targetState = title,
+            transitionSpec = {
+                fadeIn(tween(220)).togetherWith(fadeOut(tween(180)))
+            },
+            label = "topbar_title_anim"
+        ) { currentTitle ->
+            Text(
+                text = currentTitle,
+                fontFamily = UnboundedFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp,
+                lineHeight = 34.sp,
+                letterSpacing = (-0.5).sp,
+                color = Color.White,
+                modifier = Modifier.testTag("screen_top_title")
+            )
         }
     }
 }
