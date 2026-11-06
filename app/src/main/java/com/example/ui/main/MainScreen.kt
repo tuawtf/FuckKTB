@@ -871,19 +871,19 @@ private fun SettingsMenuItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Surface(
                 shape = CircleShape,
                 color = Color(0xFF1E232E),
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(40.dp)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
@@ -893,26 +893,24 @@ private fun SettingsMenuItem(
                         imageVector = icon,
                         contentDescription = null,
                         tint = Color(0xFF9EC5EA),
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
 
             Column(
-                verticalArrangement = Arrangement.spacedBy(1.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = title,
                     color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    lineHeight = 18.sp
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = subtitle,
                     color = Color(0xFF8E95A5),
-                    fontSize = 12.sp,
-                    lineHeight = 15.sp
+                    fontSize = 13.sp
                 )
             }
         }
@@ -921,7 +919,7 @@ private fun SettingsMenuItem(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = Color(0xFF626978),
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(20.dp)
         )
     }
 }
@@ -1208,35 +1206,35 @@ private fun UpdatesSubPageContent(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text = "Güncelleme Kanalı",
                             color = Color.White,
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = "Beta kanalı en yeni özellikleri, Kararlı kanalı test edilmiş sürümleri sunar.",
                             color = Color(0xFF8E95A5),
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
                         )
                     }
 
                     // Segmented Button Bar
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         color = Color(0xFF0F1218)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(3.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             val isStable = currentChannel == "STABLE"
                             val isBeta = currentChannel == "BETA"
@@ -1245,14 +1243,14 @@ private fun UpdatesSubPageContent(
                             Surface(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(9.dp))
+                                    .clip(RoundedCornerShape(10.dp))
                                     .clickable { viewModel.setUpdateChannel("STABLE") }
                                     .testTag("channel_stable_option"),
-                                shape = RoundedCornerShape(9.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 color = if (isStable) Color(0xFF1F2937) else Color.Transparent
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(vertical = 8.dp),
+                                    modifier = Modifier.padding(vertical = 10.dp),
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -1261,14 +1259,14 @@ private fun UpdatesSubPageContent(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
                                             tint = Color(0xFF9EC5EA),
-                                            modifier = Modifier.size(15.dp)
+                                            modifier = Modifier.size(16.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
                                     }
                                     Text(
                                         text = "Kararlı",
                                         color = if (isStable) Color.White else Color(0xFF8E95A5),
-                                        fontSize = 13.sp,
+                                        fontSize = 14.sp,
                                         fontWeight = if (isStable) FontWeight.Bold else FontWeight.Medium
                                     )
                                 }
@@ -1278,14 +1276,14 @@ private fun UpdatesSubPageContent(
                             Surface(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(9.dp))
+                                    .clip(RoundedCornerShape(10.dp))
                                     .clickable { viewModel.setUpdateChannel("BETA") }
                                     .testTag("channel_beta_option"),
-                                shape = RoundedCornerShape(9.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 color = if (isBeta) Color(0xFF1F2937) else Color.Transparent
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(vertical = 8.dp),
+                                    modifier = Modifier.padding(vertical = 10.dp),
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -1294,14 +1292,14 @@ private fun UpdatesSubPageContent(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
                                             tint = Color(0xFF9EC5EA),
-                                            modifier = Modifier.size(15.dp)
+                                            modifier = Modifier.size(16.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
                                     }
                                     Text(
                                         text = "Beta",
                                         color = if (isBeta) Color.White else Color(0xFF8E95A5),
-                                        fontSize = 13.sp,
+                                        fontSize = 14.sp,
                                         fontWeight = if (isBeta) FontWeight.Bold else FontWeight.Medium
                                     )
                                 }
@@ -1324,8 +1322,8 @@ private fun UpdatesSubPageContent(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // Sürüm Bilgileri
                     Row(
@@ -1333,7 +1331,7 @@ private fun UpdatesSubPageContent(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
                                 text = "Yüklü Sürüm",
                                 color = Color(0xFF8E95A5),
@@ -1342,7 +1340,7 @@ private fun UpdatesSubPageContent(
                             Text(
                                 text = "v${BuildConfig.VERSION_NAME}",
                                 color = Color.White,
-                                fontSize = 15.sp,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = UnboundedFontFamily
                             )
@@ -1381,7 +1379,7 @@ private fun UpdatesSubPageContent(
 
                         Column(
                             horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(1.dp)
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
                                 text = "En Son Sürüm ($currentChannel)",
@@ -1391,7 +1389,7 @@ private fun UpdatesSubPageContent(
                             Text(
                                 text = latestVersionNumber,
                                 color = latestVersionColor,
-                                fontSize = 14.sp,
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 fontFamily = if (latestVersionNumber.startsWith("v")) UnboundedFontFamily else FontFamily.Default
                             )
@@ -1402,18 +1400,18 @@ private fun UpdatesSubPageContent(
                     if (updateCheckState is UpdateCheckResult.Checking) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(vertical = 2.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.padding(vertical = 4.dp)
                         ) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.size(16.dp),
                                 strokeWidth = 2.dp,
                                 color = Color(0xFF9EC5EA)
                             )
                             Text(
                                 text = "GitHub sunucusu üzerinden denetleniyor...",
                                 color = Color(0xFF8E95A5),
-                                fontSize = 12.sp
+                                fontSize = 13.sp
                             )
                         }
                     }
@@ -1435,9 +1433,9 @@ private fun UpdatesSubPageContent(
                         enabled = !isChecking,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(44.dp)
+                            .height(48.dp)
                             .testTag("action_update_button"),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isUpdateAvailable) Color(0xFF10B981) else Color(0xFF2563EB),
                             contentColor = Color.White
@@ -1445,28 +1443,28 @@ private fun UpdatesSubPageContent(
                     ) {
                         if (isChecking) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
                                 color = Color.White
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Denetleniyor...", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Denetleniyor...", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         } else if (isUpdateAvailable) {
                             Icon(
                                 imageVector = Icons.Default.CloudDownload,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Şimdi Güncelle", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Şimdi Güncelle", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Güncellemeleri Denetle", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Güncellemeleri Denetle", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -1485,25 +1483,25 @@ private fun UpdatesSubPageContent(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
                             text = "Açılışta Kontrol Et",
                             color = Color.White,
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = "Uygulama her başladığında arka planda yeni sürüm olup olmadığını denetler.",
                             color = Color(0xFF8E95A5),
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
                         )
                     }
 
@@ -2146,7 +2144,7 @@ private fun CustomBottomBar(
 
     Surface(
         color = Color(0xFF12151D),
-        tonalElevation = 6.dp,
+        tonalElevation = 8.dp,
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
@@ -2154,7 +2152,7 @@ private fun CustomBottomBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 3.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2170,14 +2168,14 @@ private fun CustomBottomBar(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable {
                             if (!isSelected) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onTabSelected(tab)
                             }
                         }
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
                         .testTag("tab_" + tab.name.lowercase())
                 ) {
                     val pillModifier = if (isSelected) {
@@ -2187,11 +2185,11 @@ private fun CustomBottomBar(
                                 color = Color(0xFF1B2E48),
                                 shape = RoundedCornerShape(12.dp)
                             )
-                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                            .padding(horizontal = 14.dp, vertical = 3.dp)
                     } else {
                         Modifier
                             .offset(y = iconOffsetY)
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .padding(horizontal = 10.dp, vertical = 3.dp)
                     }
 
                     Box(
@@ -2202,17 +2200,17 @@ private fun CustomBottomBar(
                             imageVector = tab.icon,
                             contentDescription = tab.title,
                             tint = if (isSelected) Color(0xFF9EC5EA) else Color(0xFF8E95A5),
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
 
                     if (isSelected) {
-                        Spacer(modifier = Modifier.height(5.dp))
                         Text(
                             text = tab.title,
                             color = Color(0xFF9EC5EA),
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 13.sp
                         )
                     }
                 }
