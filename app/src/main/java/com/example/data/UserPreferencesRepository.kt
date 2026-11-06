@@ -18,7 +18,9 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "kt
 data class UserPreferences(
     val phoneNumber: String,
     val isOnboardingCompleted: Boolean,
-    val isAutoConnectEnabled: Boolean
+    val isAutoConnectEnabled: Boolean,
+    val updateChannel: String = "STABLE",
+    val checkUpdatesOnLaunch: Boolean = true
 )
 
 class UserPreferencesRepository(private val context: Context) {
@@ -27,6 +29,8 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_PHONE_NUMBER = stringPreferencesKey("phone_number")
         val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val KEY_AUTO_CONNECT_ENABLED = booleanPreferencesKey("auto_connect_enabled")
+        val KEY_UPDATE_CHANNEL = stringPreferencesKey("update_channel")
+        val KEY_CHECK_UPDATES_ON_LAUNCH = booleanPreferencesKey("check_updates_on_launch")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -41,10 +45,14 @@ class UserPreferencesRepository(private val context: Context) {
             val phoneNumber = preferences[KEY_PHONE_NUMBER].orEmpty()
             val isOnboardingCompleted = preferences[KEY_ONBOARDING_COMPLETED] ?: false
             val isAutoConnectEnabled = preferences[KEY_AUTO_CONNECT_ENABLED] ?: false
+            val updateChannel = preferences[KEY_UPDATE_CHANNEL] ?: "STABLE"
+            val checkUpdatesOnLaunch = preferences[KEY_CHECK_UPDATES_ON_LAUNCH] ?: true
             UserPreferences(
                 phoneNumber = phoneNumber,
                 isOnboardingCompleted = isOnboardingCompleted,
-                isAutoConnectEnabled = isAutoConnectEnabled
+                isAutoConnectEnabled = isAutoConnectEnabled,
+                updateChannel = updateChannel,
+                checkUpdatesOnLaunch = checkUpdatesOnLaunch
             )
         }
 
@@ -63,6 +71,18 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setAutoConnectEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[KEY_AUTO_CONNECT_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setUpdateChannel(channel: String) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_UPDATE_CHANNEL] = channel
+        }
+    }
+
+    suspend fun setCheckUpdatesOnLaunch(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_CHECK_UPDATES_ON_LAUNCH] = enabled
         }
     }
 

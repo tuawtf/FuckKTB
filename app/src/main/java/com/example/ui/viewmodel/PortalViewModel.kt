@@ -9,9 +9,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.CaptivePortalClient
 import com.example.SmsCodeBus
+import com.example.data.DownloadState
+import com.example.data.GitHubAsset
+import com.example.data.UpdateCheckResult
+import com.example.data.UpdateManager
 import com.example.data.UserPreferences
 import com.example.data.UserPreferencesRepository
 import com.example.util.PhoneUtils
+import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +69,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
 
     private val userPrefsRepo = UserPreferencesRepository(application)
     private val client = CaptivePortalClient(application)
+    val updateManager = UpdateManager(application)
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
     val userPreferences: StateFlow<UserPreferences> = userPrefsRepo.userPreferencesFlow
@@ -73,14 +79,20 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             initialValue = UserPreferences(
                 phoneNumber = "",
                 isOnboardingCompleted = false,
-                isAutoConnectEnabled = false
+                isAutoConnectEnabled = false,
+                updateChannel = "STABLE",
+                checkUpdatesOnLaunch = true
             )
         )
 
     private val _uiState = MutableStateFlow(PortalUiState())
     val uiState: StateFlow<PortalUiState> = _uiState.asStateFlow()
 
+    val updateCheckState: StateFlow<UpdateCheckResult> = updateManager.checkState
+    val downloadState: StateFlow<DownloadState> = updateManager.downloadState
+
     private var countdownJob: Job? = null
+    private var hasCheckedUpdateOnLaunch = false
 
     init {
         // DataStore'daki kayitli telefon numarasini izle
@@ -90,12 +102,71 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                     _uiState.update { it.copy(phoneNumber = prefs.phoneNumber) }
                     addLog(LogLevel.INFO, "Kayitli numara DataStore uzerinden yuklendi: " + PhoneUtils.formatForDisplay(prefs.phoneNumber))
                 }
+
+                // Açılışta güncelleme kontrolü
+                if (prefs.checkUpdatesOnLaunch && !hasCheckedUpdateOnLaunch) {
+                    hasCheckedUpdateOnLaunch = true
+                    checkForUpdates(prefs.updateChannel)
+                }
             }
         }
 
         checkWifiState()
         observeSmsEvents()
         addLog(LogLevel.INFO, "KTB Wi-Fi Yardimcisi baslatildi.")
+    }
+
+    fun setUpdateChannel(channel: String) {
+        viewModelScope.launch {
+            userPrefsRepo.setUpdateChannel(channel)
+            addLog(LogLevel.INFO, "Güncelleme kanalı seçildi: $channel")
+            checkForUpdates(channel)
+        }
+    }
+
+    fun setCheckUpdatesOnLaunch(enabled: Boolean) {
+        viewModelScope.launch {
+            userPrefsRepo.setCheckUpdatesOnLaunch(enabled)
+            addLog(LogLevel.INFO, "Açılışta güncelleme kontrolü: " + if (enabled) "Aktif" else "Devre Dışı")
+        }
+    }
+
+    fun checkForUpdates(channel: String) {
+        viewModelScope.launch {
+            addLog(LogLevel.INFO, "GitHub Releases denetleniyor ($channel)...")
+            val result = updateManager.checkForUpdates(channel)
+            when (result) {
+                is UpdateCheckResult.UpdateAvailable -> {
+                    addLog(LogLevel.SUCCESS, "Yeni sürüm bulundu: v${result.newVersion}")
+                }
+                is UpdateCheckResult.UpToDate -> {
+                    addLog(LogLevel.INFO, "Uygulama sürümü güncel.")
+                }
+                is UpdateCheckResult.Error -> {
+                    addLog(LogLevel.WARNING, result.message)
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun startApkDownload(asset: GitHubAsset, versionName: String) {
+        viewModelScope.launch {
+            addLog(LogLevel.INFO, "v$versionName APK indirmesi başlatılıyor...")
+            updateManager.downloadAndInstallApk(asset, versionName)
+        }
+    }
+
+    fun installApk(apkFile: File) {
+        updateManager.installApk(apkFile)
+    }
+
+    fun resetUpdateCheck() {
+        updateManager.resetCheckState()
+    }
+
+    fun resetDownloadState() {
+        updateManager.resetDownloadState()
     }
 
     fun updatePhoneNumber(phone: String) {
