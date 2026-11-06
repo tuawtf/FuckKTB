@@ -20,7 +20,9 @@ data class UserPreferences(
     val isOnboardingCompleted: Boolean,
     val isAutoConnectEnabled: Boolean,
     val updateChannel: String = "STABLE",
-    val checkUpdatesOnLaunch: Boolean = true
+    val checkUpdatesOnLaunch: Boolean = true,
+    val latestStableVersion: String = "",
+    val latestBetaVersion: String = ""
 )
 
 class UserPreferencesRepository(private val context: Context) {
@@ -31,6 +33,8 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_AUTO_CONNECT_ENABLED = booleanPreferencesKey("auto_connect_enabled")
         val KEY_UPDATE_CHANNEL = stringPreferencesKey("update_channel")
         val KEY_CHECK_UPDATES_ON_LAUNCH = booleanPreferencesKey("check_updates_on_launch")
+        val KEY_LATEST_STABLE_VERSION = stringPreferencesKey("latest_stable_version")
+        val KEY_LATEST_BETA_VERSION = stringPreferencesKey("latest_beta_version")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -47,12 +51,16 @@ class UserPreferencesRepository(private val context: Context) {
             val isAutoConnectEnabled = preferences[KEY_AUTO_CONNECT_ENABLED] ?: false
             val updateChannel = preferences[KEY_UPDATE_CHANNEL] ?: "STABLE"
             val checkUpdatesOnLaunch = preferences[KEY_CHECK_UPDATES_ON_LAUNCH] ?: true
+            val latestStableVersion = preferences[KEY_LATEST_STABLE_VERSION].orEmpty()
+            val latestBetaVersion = preferences[KEY_LATEST_BETA_VERSION].orEmpty()
             UserPreferences(
                 phoneNumber = phoneNumber,
                 isOnboardingCompleted = isOnboardingCompleted,
                 isAutoConnectEnabled = isAutoConnectEnabled,
                 updateChannel = updateChannel,
-                checkUpdatesOnLaunch = checkUpdatesOnLaunch
+                checkUpdatesOnLaunch = checkUpdatesOnLaunch,
+                latestStableVersion = latestStableVersion,
+                latestBetaVersion = latestBetaVersion
             )
         }
 
@@ -83,6 +91,18 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setCheckUpdatesOnLaunch(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[KEY_CHECK_UPDATES_ON_LAUNCH] = enabled
+        }
+    }
+
+    suspend fun setLatestStableVersion(version: String) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_LATEST_STABLE_VERSION] = version
+        }
+    }
+
+    suspend fun setLatestBetaVersion(version: String) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_LATEST_BETA_VERSION] = version
         }
     }
 

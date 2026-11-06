@@ -92,7 +92,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     val downloadState: StateFlow<DownloadState> = updateManager.downloadState
 
     private var countdownJob: Job? = null
-    private var hasCheckedUpdateOnLaunch = false
+    private var hasFetchedLatestVersionsOnLaunch = false
 
     init {
         // DataStore'daki kayitli telefon numarasini izle
@@ -103,10 +103,19 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                     addLog(LogLevel.INFO, "Kayitli numara DataStore uzerinden yuklendi: " + PhoneUtils.formatForDisplay(prefs.phoneNumber))
                 }
 
-                // Açılışta güncelleme kontrolü
-                if (prefs.checkUpdatesOnLaunch && !hasCheckedUpdateOnLaunch) {
-                    hasCheckedUpdateOnLaunch = true
-                    checkForUpdates(prefs.updateChannel)
+                // Uygulama ilk açılışta en son sürüm numaralarını arka planda sessizce kaydeder
+                if (!hasFetchedLatestVersionsOnLaunch) {
+                    hasFetchedLatestVersionsOnLaunch = true
+                    viewModelScope.launch {
+                        val (stableVer, betaVer) = updateManager.fetchLatestVersionsQuietly()
+                        if (stableVer != null) userPrefsRepo.setLatestStableVersion(stableVer)
+                        if (betaVer != null) userPrefsRepo.setLatestBetaVersion(betaVer)
+
+                        // Açılışta güncelleme denetleme ayarı açıksa arka planda kontrol et
+                        if (prefs.checkUpdatesOnLaunch) {
+                            checkForUpdates(prefs.updateChannel)
+                        }
+                    }
                 }
             }
         }
@@ -120,7 +129,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             userPrefsRepo.setUpdateChannel(channel)
             addLog(LogLevel.INFO, "Güncelleme kanalı seçildi: $channel")
-            checkForUpdates(channel)
+            // Kanal değiştiğinde otomatik sorgulama yapmaz; sadece kullanıcı 'Güncellemeleri Denetle' dediğinde kontrol edilir.
         }
     }
 

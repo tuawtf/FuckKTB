@@ -209,6 +209,55 @@ class UpdateManager(
         }
     }
 
+    /**
+     * Uygulama açılışında sessizce çağrılır.
+     * UI durumunu bozmaz (_checkState değiştirmez), sadece en güncel STABLE ve BETA sürümlerini döner.
+     */
+    suspend fun fetchLatestVersionsQuietly(): Pair<String?, String?> = withContext(Dispatchers.IO) {
+        try {
+            val apiUrl = "https://api.github.com/repos/$repoOwner/$repoName/releases"
+            val request = Request.Builder()
+                .url(apiUrl)
+                .header("Accept", "application/vnd.github.v3+json")
+                .header("User-Agent", "FKTB-Android-App")
+                .build()
+
+            val response = httpClient.newCall(request).execute()
+            if (!response.isSuccessful) return@withContext Pair(null, null)
+
+            val bodyString = response.body?.string().orEmpty()
+            val jsonArray = JSONArray(bodyString)
+
+            var latestStable: String? = null
+            var latestBeta: String? = null
+
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val isDraft = obj.optBoolean("draft", false)
+                if (isDraft) continue
+
+                val isPrerelease = obj.optBoolean("prerelease", false)
+                val tag = obj.optString("tag_name", "").removePrefix("v").removePrefix("V").trim()
+                if (tag.isBlank()) continue
+
+                if (latestBeta == null) {
+                    latestBeta = tag // İlk (en yeni) release beta kanalının sürümüdür
+                }
+
+                if (!isPrerelease && latestStable == null) {
+                    latestStable = tag // İlk stabil release
+                }
+
+                if (latestStable != null && latestBeta != null) break
+            }
+
+            Pair(latestStable, latestBeta)
+        } catch (e: Exception) {
+            Log.w("UpdateManager", "Sessiz sürüm kontrolü başarısız: ${e.message}")
+            Pair(null, null)
+        }
+    }
+
     private fun pickBestApkAsset(assets: List<GitHubAsset>): GitHubAsset? {
         val smsEnabled = BuildConfig.SMS_PERMISSION_ENABLED
         return if (smsEnabled) {

@@ -81,6 +81,7 @@ import com.example.BuildConfig
 import com.example.data.DownloadState
 import com.example.data.GitHubAsset
 import com.example.data.UpdateCheckResult
+import com.example.data.UpdateManager
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -161,7 +162,15 @@ fun MainScreen(
     val updateCheckState by viewModel.updateCheckState.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
 
-    // Açılışta veya kanal değişiminde otomatik indirme başlatılmaz; indirme sadece kullanıcı "Şimdi Güncelle" dediğinde başlar.
+    // Açılışta güncelleme kontrolü ayarı aktifse ve yeni sürüm bulunduysa paneli kullanıcıya göster (kullanıcı 'Şimdi Güncelle' demeden indirme başlamaz)
+    LaunchedEffect(updateCheckState, userPrefs.checkUpdatesOnLaunch) {
+        if (userPrefs.checkUpdatesOnLaunch && !hasAutoOpenedSheetOnLaunch) {
+            if (updateCheckState is UpdateCheckResult.UpdateAvailable) {
+                hasAutoOpenedSheetOnLaunch = true
+                showUpdateBottomSheet = true
+            }
+        }
+    }
 
     BackHandler(enabled = showUpdateBottomSheet) {
         showUpdateBottomSheet = false
@@ -866,11 +875,16 @@ private fun SettingsMenuItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
+
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() }
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -937,6 +951,7 @@ private fun UpdatesSubPageContent(
     val updateCheckState by viewModel.updateCheckState.collectAsState()
     val currentChannel = userPrefs.updateChannel
     val isAutoCheck = userPrefs.checkUpdatesOnLaunch
+    val haptic = LocalHapticFeedback.current
 
     // Kullanıcı "Güncellemeleri Denetle" butonuna bastığında panel (ModalBottomSheet) açılması için state
     var manualCheckRequested by remember { mutableStateOf(false) }
@@ -1244,7 +1259,10 @@ private fun UpdatesSubPageContent(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .clickable { viewModel.setUpdateChannel("STABLE") }
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        viewModel.setUpdateChannel("STABLE")
+                                    }
                                     .testTag("channel_stable_option"),
                                 shape = RoundedCornerShape(10.dp),
                                 color = if (isStable) Color(0xFF1F2937) else Color.Transparent
@@ -1277,7 +1295,10 @@ private fun UpdatesSubPageContent(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .clickable { viewModel.setUpdateChannel("BETA") }
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        viewModel.setUpdateChannel("BETA")
+                                    }
                                     .testTag("channel_beta_option"),
                                 shape = RoundedCornerShape(10.dp),
                                 color = if (isBeta) Color(0xFF1F2937) else Color.Transparent
@@ -1347,34 +1368,36 @@ private fun UpdatesSubPageContent(
                         }
 
                         // En son sürüm bilgisi ve renk mantığı:
+                        // - Uygulama ilk açılışta kaydedilen sürüm değerleri (userPrefs.latestStableVersion / userPrefs.latestBetaVersion) kullanılır.
                         // - Şuankiyle aynı ise: beyaz renkte
                         // - Güncel yeni bir sürümse ve stable ise: yeşil renkte (#34D399)
                         // - Güncel yeni bir sürümse ve beta ise: sarı renkte (#FBBF24)
                         // - Sadece sürüm numarası ve "v" harfi o renkte olacak
-                        val latestVersionNumber: String?
+                        val currentInstalled = BuildConfig.VERSION_NAME
+                        val recordedVersion = if (currentChannel == "BETA") {
+                            userPrefs.latestBetaVersion.ifBlank { userPrefs.latestStableVersion }
+                        } else {
+                            userPrefs.latestStableVersion
+                        }
+
+                        val latestVersionNumber: String
                         val latestVersionColor: Color
 
-                        when (val res = updateCheckState) {
-                            is UpdateCheckResult.UpdateAvailable -> {
-                                latestVersionNumber = "v${res.newVersion}"
-                                latestVersionColor = if (res.isPrerelease || currentChannel == "BETA") {
-                                    Color(0xFFFBBF24) // Beta -> Sarı
-                                } else {
-                                    Color(0xFF34D399) // Stable -> Yeşil
-                                }
+                        if (updateCheckState is UpdateCheckResult.Checking) {
+                            latestVersionNumber = "Kontrol ediliyor..."
+                            latestVersionColor = Color(0xFF9EC5EA)
+                        } else if (recordedVersion.isNotBlank()) {
+                            latestVersionNumber = "v$recordedVersion"
+                            val isNewer = UpdateManager.isVersionNewer(recordedVersion, currentInstalled)
+                            latestVersionColor = if (isNewer) {
+                                if (currentChannel == "BETA") Color(0xFFFBBF24) else Color(0xFF34D399)
+                            } else {
+                                Color.White // Şuankiyle aynı veya eski -> Beyaz
                             }
-                            is UpdateCheckResult.UpToDate -> {
-                                latestVersionNumber = "v${BuildConfig.VERSION_NAME}"
-                                latestVersionColor = Color.White // Şuankiyle aynı -> Beyaz
-                            }
-                            is UpdateCheckResult.Checking -> {
-                                latestVersionNumber = "Kontrol ediliyor..."
-                                latestVersionColor = Color(0xFF9EC5EA)
-                            }
-                            else -> {
-                                latestVersionNumber = "—"
-                                latestVersionColor = Color.White
-                            }
+                        } else {
+                            // Henüz kaydedilmiş veri yoksa şuanki sürüm gösterilir
+                            latestVersionNumber = "v$currentInstalled"
+                            latestVersionColor = Color.White
                         }
 
                         Column(
@@ -1422,6 +1445,7 @@ private fun UpdatesSubPageContent(
 
                     Button(
                         onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             if (isUpdateAvailable) {
                                 val available = updateCheckState as UpdateCheckResult.UpdateAvailable
                                 onStartDownload(available.apkAsset, available.newVersion)
@@ -1509,7 +1533,10 @@ private fun UpdatesSubPageContent(
 
                     Switch(
                         checked = isAutoCheck,
-                        onCheckedChange = { viewModel.setCheckUpdatesOnLaunch(it) },
+                        onCheckedChange = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.setCheckUpdatesOnLaunch(it)
+                        },
                         modifier = Modifier.testTag("auto_check_switch")
                     )
                 }
@@ -1844,16 +1871,105 @@ private fun UpdateDownloadBottomSheet(
                 }
 
                 DownloadState.Idle -> {
-                    // Boş durum veya hazırlık
-                    CircularProgressIndicator(
-                        color = Color(0xFF9EC5EA),
-                        modifier = Modifier.size(40.dp)
-                    )
-                    Text(
-                        text = "İndirme başlatılıyor...",
-                        color = Color(0xFF8E95A5),
-                        fontSize = 14.sp
-                    )
+                    if (checkState is UpdateCheckResult.UpdateAvailable) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF1E232E),
+                            modifier = Modifier.size(64.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudDownload,
+                                    contentDescription = null,
+                                    tint = Color(0xFF60A5FA),
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        }
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "Yeni Güncelleme Mevcut!",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = UnboundedFontFamily,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFF1F2937).copy(alpha = 0.7f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF374151))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Text(
+                                        text = "v${BuildConfig.VERSION_NAME}",
+                                        color = Color.White,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = UnboundedFontFamily
+                                    )
+
+                                    Text(
+                                        text = "────────▶",
+                                        color = Color(0xFF60A5FA),
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+
+                                    Text(
+                                        text = "v${checkState.newVersion}",
+                                        color = Color.White,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = UnboundedFontFamily
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "${checkState.apkAsset.name} (${String.format(java.util.Locale.US, "%.1f MB", checkState.apkAsset.size / (1024.0 * 1024.0))})",
+                                color = Color(0xFF8E95A5),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+
+                        Button(
+                            onClick = { onRetryDownload(checkState.apkAsset, checkState.newVersion) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .testTag("sheet_start_update_button"),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF10B981),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Şimdi Güncelle", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        CircularProgressIndicator(
+                            color = Color(0xFF9EC5EA),
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Text(
+                            text = "İndirme başlatılıyor...",
+                            color = Color(0xFF8E95A5),
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             }
         }
@@ -2073,6 +2189,8 @@ private fun TopBarSection(
     showBackButton: Boolean = false,
     onBackClick: () -> Unit = {}
 ) {
+    val haptic = LocalHapticFeedback.current
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -2091,7 +2209,10 @@ private fun TopBarSection(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .clickable { onBackClick() }
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onBackClick()
+                        }
                         .testTag("settings_back_button")
                 ) {
                     Box(
@@ -2152,7 +2273,7 @@ private fun CustomBottomBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 3.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2171,11 +2292,11 @@ private fun CustomBottomBar(
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
                             if (!isSelected) {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onTabSelected(tab)
                             }
                         }
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
                         .testTag("tab_" + tab.name.lowercase())
                 ) {
                     val pillModifier = if (isSelected) {
@@ -2185,11 +2306,11 @@ private fun CustomBottomBar(
                                 color = Color(0xFF1B2E48),
                                 shape = RoundedCornerShape(12.dp)
                             )
-                            .padding(horizontal = 14.dp, vertical = 3.dp)
+                            .padding(horizontal = 18.dp, vertical = 4.dp)
                     } else {
                         Modifier
                             .offset(y = iconOffsetY)
-                            .padding(horizontal = 10.dp, vertical = 3.dp)
+                            .padding(horizontal = 14.dp, vertical = 4.dp)
                     }
 
                     Box(
