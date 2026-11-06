@@ -161,17 +161,7 @@ fun MainScreen(
     val updateCheckState by viewModel.updateCheckState.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
 
-    // Açılışta güncelleme kontrolü aktifse ve yeni sürüm bulunduysa paneli otomatik aç ve indirmeyi başlat
-    LaunchedEffect(updateCheckState, userPrefs.checkUpdatesOnLaunch) {
-        if (userPrefs.checkUpdatesOnLaunch && !hasAutoOpenedSheetOnLaunch) {
-            if (updateCheckState is UpdateCheckResult.UpdateAvailable) {
-                hasAutoOpenedSheetOnLaunch = true
-                showUpdateBottomSheet = true
-                val update = updateCheckState as UpdateCheckResult.UpdateAvailable
-                viewModel.startApkDownload(update.apkAsset, update.newVersion)
-            }
-        }
-    }
+    // Açılışta veya kanal değişiminde otomatik indirme başlatılmaz; indirme sadece kullanıcı "Şimdi Güncelle" dediğinde başlar.
 
     BackHandler(enabled = showUpdateBottomSheet) {
         showUpdateBottomSheet = false
@@ -881,19 +871,19 @@ private fun SettingsMenuItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 14.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Surface(
                 shape = CircleShape,
                 color = Color(0xFF1E232E),
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(36.dp)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
@@ -903,24 +893,26 @@ private fun SettingsMenuItem(
                         imageVector = icon,
                         contentDescription = null,
                         tint = Color(0xFF9EC5EA),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
             Column(
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalArrangement = Arrangement.spacedBy(1.dp)
             ) {
                 Text(
                     text = title,
                     color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 18.sp
                 )
                 Text(
                     text = subtitle,
                     color = Color(0xFF8E95A5),
-                    fontSize = 13.sp
+                    fontSize = 12.sp,
+                    lineHeight = 15.sp
                 )
             }
         }
@@ -929,7 +921,7 @@ private fun SettingsMenuItem(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = Color(0xFF626978),
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(18.dp)
         )
     }
 }
@@ -937,6 +929,7 @@ private fun SettingsMenuItem(
 // -------------------------------------------------------------
 // GÜNCELLEMELER ALT SAYFASI (3 ANA BLOK)
 // -------------------------------------------------------------
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun UpdatesSubPageContent(
     viewModel: PortalViewModel,
@@ -947,57 +940,254 @@ private fun UpdatesSubPageContent(
     val currentChannel = userPrefs.updateChannel
     val isAutoCheck = userPrefs.checkUpdatesOnLaunch
 
-    // Kullanıcı "Güncellemeleri Denetle" butonuna bastığında hata oluşursa panel (Dialog) olarak göstermek için state
+    // Kullanıcı "Güncellemeleri Denetle" butonuna bastığında panel (ModalBottomSheet) açılması için state
     var manualCheckRequested by remember { mutableStateOf(false) }
-    var showErrorDialog by remember { mutableStateOf<String?>(null) }
+    var showUpToDateSheet by remember { mutableStateOf<UpdateCheckResult.UpToDate?>(null) }
+    var showErrorSheet by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(updateCheckState) {
-        if (manualCheckRequested && updateCheckState is UpdateCheckResult.Error) {
-            showErrorDialog = (updateCheckState as UpdateCheckResult.Error).message
-            manualCheckRequested = false
-        } else if (updateCheckState !is UpdateCheckResult.Checking) {
-            manualCheckRequested = false
+        if (manualCheckRequested) {
+            when (updateCheckState) {
+                is UpdateCheckResult.UpToDate -> {
+                    showUpToDateSheet = updateCheckState as UpdateCheckResult.UpToDate
+                    manualCheckRequested = false
+                }
+                is UpdateCheckResult.Error -> {
+                    showErrorSheet = (updateCheckState as UpdateCheckResult.Error).message
+                    manualCheckRequested = false
+                }
+                is UpdateCheckResult.UpdateAvailable -> {
+                    manualCheckRequested = false
+                }
+                else -> {}
+            }
         }
     }
 
-    if (showErrorDialog != null) {
-        AlertDialog(
-            onDismissRequest = { showErrorDialog = null },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Error,
-                    contentDescription = null,
-                    tint = Color(0xFFF87171),
-                    modifier = Modifier.size(32.dp)
-                )
-            },
-            title = {
-                Text(
-                    text = "Güncelleme Kontrolü Başarısız",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            },
-            text = {
-                Text(
-                    text = showErrorDialog.orEmpty(),
-                    color = Color(0xFF8E95A5),
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showErrorDialog = null },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                ) {
-                    Text("Tamam", color = Color.White)
-                }
-            },
+    // Uygulamanız Güncel Alt Paneli (ModalBottomSheet)
+    if (showUpToDateSheet != null) {
+        val upToDateData = showUpToDateSheet!!
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+        ModalBottomSheet(
+            onDismissRequest = { showUpToDateSheet = null },
+            sheetState = sheetState,
             containerColor = Color(0xFF161A22),
-            shape = RoundedCornerShape(20.dp)
-        )
+            contentColor = Color.White,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF374151)) },
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 36.dp, top = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF064E3B),
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF34D399),
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Uygulamanız Güncel",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = UnboundedFontFamily,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "En son sürümü kullanıyorsunuz. Herhangi bir güncelleme gerekmiyor.",
+                        color = Color(0xFF8E95A5),
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                // Sürüm, Tarih ve Commit ID Bilgi Kartı
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF0F1218),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF262A34)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "Uygulama Sürümü", color = Color(0xFF8E95A5), fontSize = 13.sp)
+                            Text(
+                                text = "v${upToDateData.currentVersion}",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = UnboundedFontFamily
+                            )
+                        }
+
+                        HorizontalDivider(color = Color(0xFF1E232E), thickness = 1.dp)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "Sürüm Tarihi", color = Color(0xFF8E95A5), fontSize = 13.sp)
+                            val formattedDate = if (upToDateData.publishedAt.isNotBlank()) {
+                                upToDateData.publishedAt.take(10) // YYYY-MM-DD
+                            } else {
+                                "Güncel"
+                            }
+                            Text(
+                                text = formattedDate,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        HorizontalDivider(color = Color(0xFF1E232E), thickness = 1.dp)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "Commit ID / Tag", color = Color(0xFF8E95A5), fontSize = 13.sp)
+                            val commitDisplay = if (upToDateData.commitHash.isNotBlank()) {
+                                upToDateData.commitHash.take(7)
+                            } else {
+                                "HEAD"
+                            }
+                            Text(
+                                text = commitDisplay,
+                                color = Color(0xFF9EC5EA),
+                                fontSize = 13.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = { showUpToDateSheet = null },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F2937), contentColor = Color.White)
+                ) {
+                    Text("Tamam", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+
+    // Hata Alt Paneli (ModalBottomSheet)
+    if (showErrorSheet != null) {
+        val errorMessage = showErrorSheet!!
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+        ModalBottomSheet(
+            onDismissRequest = { showErrorSheet = null },
+            sheetState = sheetState,
+            containerColor = Color(0xFF161A22),
+            contentColor = Color.White,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF374151)) },
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 36.dp, top = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF7F1D1D),
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Error,
+                            contentDescription = null,
+                            tint = Color(0xFFF87171),
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Kontrol Başarısız",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = UnboundedFontFamily,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "GitHub sunucusu ile iletişim kurulurken bir sorun meydana geldi.",
+                        color = Color(0xFF8E95A5),
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFF0F1218),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF374151)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = errorMessage,
+                        color = Color(0xFFF87171),
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(16.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                Button(
+                    onClick = { showErrorSheet = null },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F2937), contentColor = Color.White)
+                ) {
+                    Text("Kapat", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
     }
 
     LazyColumn(
@@ -1018,35 +1208,35 @@ private fun UpdatesSubPageContent(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             text = "Güncelleme Kanalı",
                             color = Color.White,
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = "Beta kanalı en yeni özellikleri, Kararlı kanalı test edilmiş sürümleri sunar.",
                             color = Color(0xFF8E95A5),
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
                         )
                     }
 
                     // Segmented Button Bar
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = Color(0xFF0F1218)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                .padding(3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             val isStable = currentChannel == "STABLE"
                             val isBeta = currentChannel == "BETA"
@@ -1055,14 +1245,14 @@ private fun UpdatesSubPageContent(
                             Surface(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(9.dp))
                                     .clickable { viewModel.setUpdateChannel("STABLE") }
                                     .testTag("channel_stable_option"),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(9.dp),
                                 color = if (isStable) Color(0xFF1F2937) else Color.Transparent
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(vertical = 10.dp),
+                                    modifier = Modifier.padding(vertical = 8.dp),
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -1071,14 +1261,14 @@ private fun UpdatesSubPageContent(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
                                             tint = Color(0xFF9EC5EA),
-                                            modifier = Modifier.size(16.dp)
+                                            modifier = Modifier.size(15.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
                                     }
                                     Text(
                                         text = "Kararlı",
                                         color = if (isStable) Color.White else Color(0xFF8E95A5),
-                                        fontSize = 14.sp,
+                                        fontSize = 13.sp,
                                         fontWeight = if (isStable) FontWeight.Bold else FontWeight.Medium
                                     )
                                 }
@@ -1088,14 +1278,14 @@ private fun UpdatesSubPageContent(
                             Surface(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(9.dp))
                                     .clickable { viewModel.setUpdateChannel("BETA") }
                                     .testTag("channel_beta_option"),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(9.dp),
                                 color = if (isBeta) Color(0xFF1F2937) else Color.Transparent
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(vertical = 10.dp),
+                                    modifier = Modifier.padding(vertical = 8.dp),
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -1104,14 +1294,14 @@ private fun UpdatesSubPageContent(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
                                             tint = Color(0xFF9EC5EA),
-                                            modifier = Modifier.size(16.dp)
+                                            modifier = Modifier.size(15.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
                                     }
                                     Text(
                                         text = "Beta",
                                         color = if (isBeta) Color.White else Color(0xFF8E95A5),
-                                        fontSize = 14.sp,
+                                        fontSize = 13.sp,
                                         fontWeight = if (isBeta) FontWeight.Bold else FontWeight.Medium
                                     )
                                 }
@@ -1134,8 +1324,8 @@ private fun UpdatesSubPageContent(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Sürüm Bilgileri
                     Row(
@@ -1143,7 +1333,7 @@ private fun UpdatesSubPageContent(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                             Text(
                                 text = "Yüklü Sürüm",
                                 color = Color(0xFF8E95A5),
@@ -1152,7 +1342,7 @@ private fun UpdatesSubPageContent(
                             Text(
                                 text = "v${BuildConfig.VERSION_NAME}",
                                 color = Color.White,
-                                fontSize = 16.sp,
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = UnboundedFontFamily
                             )
@@ -1191,7 +1381,7 @@ private fun UpdatesSubPageContent(
 
                         Column(
                             horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                            verticalArrangement = Arrangement.spacedBy(1.dp)
                         ) {
                             Text(
                                 text = "En Son Sürüm ($currentChannel)",
@@ -1201,86 +1391,31 @@ private fun UpdatesSubPageContent(
                             Text(
                                 text = latestVersionNumber,
                                 color = latestVersionColor,
-                                fontSize = 15.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 fontFamily = if (latestVersionNumber.startsWith("v")) UnboundedFontFamily else FontFamily.Default
                             )
                         }
                     }
 
-                    // Durum Açıklama Metni (Hata mesajı artık kart içine gömülmüyor, sadece buton basıldığında alert dialog olarak açılıyor)
-                    when (val res = updateCheckState) {
-                        is UpdateCheckResult.Checking -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = Color(0xFF9EC5EA)
-                                )
-                                Text(
-                                    text = "GitHub sunucusu üzerinden denetleniyor...",
-                                    color = Color(0xFF8E95A5),
-                                    fontSize = 13.sp
-                                )
-                            }
+                    // Kontrol ediliyor göstergesi
+                    if (updateCheckState is UpdateCheckResult.Checking) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = Color(0xFF9EC5EA)
+                            )
+                            Text(
+                                text = "GitHub sunucusu üzerinden denetleniyor...",
+                                color = Color(0xFF8E95A5),
+                                fontSize = 12.sp
+                            )
                         }
-                        is UpdateCheckResult.UpdateAvailable -> {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = Color(0xFF1B365D).copy(alpha = 0.5f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2563EB).copy(alpha = 0.6f)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CloudDownload,
-                                        contentDescription = null,
-                                        tint = Color(0xFF60A5FA),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Column {
-                                        Text(
-                                            text = "Yeni Sürüm Mevcut! (v${res.newVersion})",
-                                            color = Color.White,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "${res.apkAsset.name} (${String.format(java.util.Locale.US, "%.1f MB", res.apkAsset.size / (1024.0 * 1024.0))})",
-                                            color = Color(0xFF9EC5EA),
-                                            fontSize = 12.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        is UpdateCheckResult.UpToDate -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = Color(0xFF34D399),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    text = "Uygulamanız güncel. En son sürümü kullanıyorsunuz.",
-                                    color = Color(0xFF34D399),
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-                        else -> Unit
                     }
 
                     // Aksiyon Butonu ("Güncellemeleri Denetle" veya "Şimdi Güncelle")
@@ -1300,9 +1435,9 @@ private fun UpdatesSubPageContent(
                         enabled = !isChecking,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(44.dp)
                             .testTag("action_update_button"),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isUpdateAvailable) Color(0xFF10B981) else Color(0xFF2563EB),
                             contentColor = Color.White
@@ -1310,28 +1445,28 @@ private fun UpdatesSubPageContent(
                     ) {
                         if (isChecking) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
+                                modifier = Modifier.size(16.dp),
                                 strokeWidth = 2.dp,
                                 color = Color.White
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Denetleniyor...", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Denetleniyor...", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         } else if (isUpdateAvailable) {
                             Icon(
                                 imageVector = Icons.Default.CloudDownload,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Şimdi Güncelle", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Şimdi Güncelle", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Güncellemeleri Denetle", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Güncellemeleri Denetle", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -1350,25 +1485,25 @@ private fun UpdatesSubPageContent(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(18.dp),
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Text(
                             text = "Açılışta Kontrol Et",
                             color = Color.White,
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = "Uygulama her başladığında arka planda yeni sürüm olup olmadığını denetler.",
                             color = Color(0xFF8E95A5),
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
                         )
                     }
 
@@ -2011,7 +2146,7 @@ private fun CustomBottomBar(
 
     Surface(
         color = Color(0xFF12151D),
-        tonalElevation = 8.dp,
+        tonalElevation = 6.dp,
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
@@ -2019,14 +2154,14 @@ private fun CustomBottomBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
             MainTab.entries.forEach { tab ->
                 val isSelected = tab == selectedTab
                 val iconOffsetY by animateDpAsState(
-                    targetValue = if (isSelected) (-4).dp else 0.dp,
+                    targetValue = if (isSelected) (-2).dp else 0.dp,
                     animationSpec = tween(durationMillis = 200),
                     label = "tab_icon_offset"
                 )
@@ -2035,14 +2170,14 @@ private fun CustomBottomBar(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .clickable {
                             if (!isSelected) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onTabSelected(tab)
                             }
                         }
-                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
                         .testTag("tab_" + tab.name.lowercase())
                 ) {
                     val pillModifier = if (isSelected) {
@@ -2050,13 +2185,13 @@ private fun CustomBottomBar(
                             .offset(y = iconOffsetY)
                             .background(
                                 color = Color(0xFF1B2E48),
-                                shape = RoundedCornerShape(16.dp)
+                                shape = RoundedCornerShape(12.dp)
                             )
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
                     } else {
                         Modifier
                             .offset(y = iconOffsetY)
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
                     }
 
                     Box(
@@ -2067,16 +2202,16 @@ private fun CustomBottomBar(
                             imageVector = tab.icon,
                             contentDescription = tab.title,
                             tint = if (isSelected) Color(0xFF9EC5EA) else Color(0xFF8E95A5),
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
                     if (isSelected) {
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(5.dp))
                         Text(
                             text = tab.title,
                             color = Color(0xFF9EC5EA),
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }

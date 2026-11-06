@@ -36,18 +36,26 @@ data class GitHubRelease(
     val prerelease: Boolean,
     val draft: Boolean,
     val body: String,
+    val publishedAt: String,
+    val targetCommitish: String,
     val assets: List<GitHubAsset>
 )
 
 sealed interface UpdateCheckResult {
     data object Idle : UpdateCheckResult
     data object Checking : UpdateCheckResult
-    data object UpToDate : UpdateCheckResult
+    data class UpToDate(
+        val currentVersion: String = BuildConfig.VERSION_NAME,
+        val publishedAt: String = "",
+        val commitHash: String = ""
+    ) : UpdateCheckResult
     data class UpdateAvailable(
         val currentVersion: String,
         val newVersion: String,
         val releaseName: String,
         val changelog: String,
+        val publishedAt: String,
+        val commitHash: String,
         val apkAsset: GitHubAsset,
         val isPrerelease: Boolean
     ) : UpdateCheckResult
@@ -131,6 +139,9 @@ class UpdateManager(
                     }
                 }
 
+                val publishedAt = obj.optString("published_at", "")
+                val targetCommitish = obj.optString("target_commitish", "")
+
                 releases.add(
                     GitHubRelease(
                         id = obj.optLong("id", 0),
@@ -139,6 +150,8 @@ class UpdateManager(
                         prerelease = obj.optBoolean("prerelease", false),
                         draft = isDraft,
                         body = obj.optString("body", ""),
+                        publishedAt = publishedAt,
+                        targetCommitish = targetCommitish,
                         assets = assets
                     )
                 )
@@ -154,7 +167,7 @@ class UpdateManager(
             }
 
             if (eligibleReleases.isEmpty()) {
-                val result = UpdateCheckResult.UpToDate
+                val result = UpdateCheckResult.UpToDate()
                 _checkState.value = result
                 return@withContext result
             }
@@ -171,6 +184,8 @@ class UpdateManager(
                         newVersion = latestRelease.tagName.removePrefix("v").removePrefix("V"),
                         releaseName = latestRelease.name,
                         changelog = latestRelease.body,
+                        publishedAt = latestRelease.publishedAt,
+                        commitHash = latestRelease.targetCommitish,
                         apkAsset = matchingApk,
                         isPrerelease = latestRelease.prerelease
                     )
@@ -179,7 +194,11 @@ class UpdateManager(
                 }
             }
 
-            val result = UpdateCheckResult.UpToDate
+            val result = UpdateCheckResult.UpToDate(
+                currentVersion = currentVersion,
+                publishedAt = latestRelease.publishedAt,
+                commitHash = latestRelease.targetCommitish
+            )
             _checkState.value = result
             result
         } catch (e: Exception) {
