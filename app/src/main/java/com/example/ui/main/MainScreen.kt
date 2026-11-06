@@ -36,11 +36,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
@@ -96,6 +100,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
@@ -137,21 +142,37 @@ fun MainScreen(
     onResetOnboarding: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(MainTab.HOME) }
+    var activeSettingsSubPage by remember { mutableStateOf<String?>(null) }
     val uiState by viewModel.uiState.collectAsState()
     val userPrefs by viewModel.userPreferences.collectAsState()
+
+    BackHandler(enabled = selectedTab == MainTab.SETTINGS && activeSettingsSubPage != null) {
+        activeSettingsSubPage = null
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopBarSection(
-                title = selectedTab.title
+                title = if (selectedTab == MainTab.SETTINGS && activeSettingsSubPage != null) {
+                    activeSettingsSubPage ?: selectedTab.title
+                } else {
+                    selectedTab.title
+                },
+                showBackButton = selectedTab == MainTab.SETTINGS && activeSettingsSubPage != null,
+                onBackClick = { activeSettingsSubPage = null }
             )
         },
         bottomBar = {
             CustomBottomBar(
                 selectedTab = selectedTab,
-                onTabSelected = { selectedTab = it }
+                onTabSelected = {
+                    selectedTab = it
+                    if (it != MainTab.SETTINGS) {
+                        activeSettingsSubPage = null
+                    }
+                }
             )
         }
     ) { innerPadding ->
@@ -170,10 +191,8 @@ fun MainScreen(
                     MainTab.CONNECTIONS -> ConnectionsTabContent()
                     MainTab.LOGS -> LogsTabContent(viewModel = viewModel)
                     MainTab.SETTINGS -> SettingsTabContent(
-                        viewModel = viewModel,
-                        registeredPhone = userPrefs.phoneNumber,
-                        isAutoConnectEnabled = userPrefs.isAutoConnectEnabled,
-                        onResetOnboarding = onResetOnboarding
+                        activeSubPage = activeSettingsSubPage,
+                        onSelectSubPage = { activeSettingsSubPage = it }
                     )
                 }
             }
@@ -652,231 +671,274 @@ private fun LogsTabContent(viewModel: PortalViewModel) {
 // -------------------------------------------------------------
 @Composable
 private fun SettingsTabContent(
-    viewModel: PortalViewModel,
-    registeredPhone: String,
-    isAutoConnectEnabled: Boolean,
-    onResetOnboarding: () -> Unit
+    activeSubPage: String?,
+    onSelectSubPage: (String) -> Unit
 ) {
-    var showEditPhoneDialog by remember { mutableStateOf(false) }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-            // 1. Telefon Numarasi Ayari
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primaryContainer),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Phone,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        text = "Kayitli Telefon Numarasi",
-                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                                    )
-                                    Text(
-                                        text = if (registeredPhone.isNotBlank()) PhoneUtils.formatForDisplay(registeredPhone) else "Numara tanimlanmamis",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-
-                            FilledTonalButton(
-                                onClick = { showEditPhoneDialog = true },
-                                modifier = Modifier.testTag("edit_phone_button")
-                            ) {
-                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Duzenle", style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 2. Otomasyon Ayarlari
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Row(
+    AnimatedContent(
+        targetState = activeSubPage,
+        transitionSpec = {
+            fadeIn(tween(220)).togetherWith(fadeOut(tween(180)))
+        },
+        label = "settings_subpage_anim"
+    ) { subPage ->
+        if (subPage != null) {
+            SettingsSubPagePlaceholder(title = subPage)
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                // Grup 1 (Ağ Ayarları Kart Bloğu - RoundedCornerShape(20.dp), Zemin: #161A22)
+                item {
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .testTag("settings_group_network"),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF161A22))
                     ) {
-                        Row(
-                            modifier = Modifier.weight(1f),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.secondaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Sync,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Column {
-                                Text(
-                                    text = "Wi-Fi Algilandiginda Baglan",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                                )
-                                Text(
-                                    text = "Kutuphane agina baglanildiginda portali otomatik acar.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                        Column {
+                            // 1. Öğe: "Kablosuz"
+                            SettingsMenuItem(
+                                icon = Icons.Default.Wifi,
+                                title = "Kablosuz",
+                                subtitle = "Wi-Fi bağlantı ve ağ yapılandırması",
+                                onClick = { onSelectSubPage("Kablosuz") },
+                                modifier = Modifier.testTag("settings_item_wireless")
+                            )
 
-                        Switch(
-                            checked = isAutoConnectEnabled,
-                            onCheckedChange = { viewModel.setAutoConnect(it) },
-                            modifier = Modifier.testTag("auto_connect_switch")
-                        )
+                            // İnce ayırıcı çizgi
+                            HorizontalDivider(
+                                color = Color(0xFF262A34),
+                                thickness = 1.dp,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+
+                            // 2. Öğe: "Bağlantılar"
+                            SettingsMenuItem(
+                                icon = Icons.Default.AccountTree,
+                                title = "Bağlantılar",
+                                subtitle = "Kütüphane ağ noktaları ve kayıtlı portallar",
+                                onClick = { onSelectSubPage("Bağlantılar") },
+                                modifier = Modifier.testTag("settings_item_connections")
+                            )
+                        }
                     }
                 }
-            }
 
-            // 3. Kurulum Sihirbazini Yeniden Baslat
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Row(
+                // Araya Dikey Boşluk (16.dp)
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                // Grup 2 (Uygulama Tercihleri Bloğu - RoundedCornerShape(20.dp), Zemin: #161A22)
+                item {
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .testTag("settings_group_preferences"),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF161A22))
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Kurulum Sihirbazi",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                        Column {
+                            // 3. Öğe: "Görünüm"
+                            SettingsMenuItem(
+                                icon = Icons.Default.Palette,
+                                title = "Görünüm",
+                                subtitle = "Tema, renkler ve arayüz kişiselleştirmesi",
+                                onClick = { onSelectSubPage("Görünüm") },
+                                modifier = Modifier.testTag("settings_item_appearance")
                             )
-                            Text(
-                                text = "Ilk acilis ve tanitim ekranlarini yeniden baslatir.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
 
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.resetOnboarding()
-                                onResetOnboarding()
-                            },
-                            modifier = Modifier.testTag("restart_onboarding_button")
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Sifirla", style = MaterialTheme.typography.labelSmall)
+                            // İnce ayırıcı çizgi
+                            HorizontalDivider(
+                                color = Color(0xFF262A34),
+                                thickness = 1.dp,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+
+                            // 4. Öğe: "Güncellemeler"
+                            SettingsMenuItem(
+                                icon = Icons.Default.SystemUpdate,
+                                title = "Güncellemeler",
+                                subtitle = "Sürüm denetimi ve yeni güncellemeler",
+                                onClick = { onSelectSubPage("Güncellemeler") },
+                                modifier = Modifier.testTag("settings_item_updates")
+                            )
                         }
                     }
                 }
-            }
 
-            // 4. Hakkinda Bolumu
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                ) {
+                // Araya Dikey Boşluk (24.dp)
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                // Grup 3: "Hakkında" Bölümü (Ayrı Kart)
+                item {
                     Column(
-                        modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Text(
+                            text = "Hakkında",
+                            color = Color(0xFF8E95A5),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("settings_group_about"),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF161A22))
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Text(
-                                text = "Hakkinda & Bilgi",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            SettingsMenuItem(
+                                icon = Icons.Default.Info,
+                                title = "FKTB Wi-Fi Giriş",
+                                subtitle = "v1.0.0 • Açık Kaynak",
+                                onClick = { onSelectSubPage("Hakkında") },
+                                modifier = Modifier.testTag("settings_item_about")
                             )
                         }
-                        Text(
-                            text = "KTB Kutuphane Wi-Fi Giris Yardimcisi - Surum 1.0.0",
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
-                        )
-                        Text(
-                            text = "T.C. Kultur ve Turizm Bakanligi kutuphane aglarindaki captive portal SMS dogrulama surecini kolaylastirmak uzere gelistirilmis acik kaynakli bir aractir.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                        Text(
-                            text = "Guvenlik: Telefon numaraniz ve dogrulama kodlariniz yalnizca cihazinizdaki yerel DataStore uzerinde saklanir. Hicbir ucuncu taraf sunucuya veri aktarilmaz.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(32.dp))
                 }
             }
         }
+    }
+}
 
-        if (showEditPhoneDialog) {
-            EditPhoneDialog(
-                currentPhone = registeredPhone,
-                onDismiss = { showEditPhoneDialog = false },
-                onSave = { newPhone ->
-                    viewModel.updatePhoneNumber(newPhone)
-                    showEditPhoneDialog = false
+@Composable
+private fun SettingsMenuItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFF1E232E),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = Color(0xFF9EC5EA),
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
+            }
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = subtitle,
+                    color = Color(0xFF8E95A5),
+                    fontSize = 13.sp
+                )
+            }
+        }
+
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = Color(0xFF626978),
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun SettingsSubPagePlaceholder(
+    title: String
+) {
+    val icon = when (title) {
+        "Kablosuz" -> Icons.Default.Wifi
+        "Bağlantılar" -> Icons.Default.AccountTree
+        "Görünüm" -> Icons.Default.Palette
+        "Güncellemeler" -> Icons.Default.SystemUpdate
+        "Hakkında" -> Icons.Default.Info
+        else -> Icons.Default.Settings
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFF161A22),
+                modifier = Modifier.size(80.dp)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = Color(0xFF9EC5EA),
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = "Bu ayar sayfası yakında yapılandırılacaktır.",
+                color = Color(0xFF8E95A5),
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
             )
         }
     }
+}
 
 @Composable
 private fun EditPhoneDialog(
@@ -1028,7 +1090,9 @@ private fun ConnectionsTabContent() {
 // -------------------------------------------------------------
 @Composable
 private fun TopBarSection(
-    title: String
+    title: String,
+    showBackButton: Boolean = false,
+    onBackClick: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -1037,23 +1101,53 @@ private fun TopBarSection(
             .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 8.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        AnimatedContent(
-            targetState = title,
-            transitionSpec = {
-                fadeIn(tween(220)).togetherWith(fadeOut(tween(180)))
-            },
-            label = "topbar_title_anim"
-        ) { currentTitle ->
-            Text(
-                text = currentTitle,
-                fontFamily = UnboundedFontFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 28.sp,
-                lineHeight = 34.sp,
-                letterSpacing = (-0.5).sp,
-                color = Color.White,
-                modifier = Modifier.testTag("screen_top_title")
-            )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start
+        ) {
+            if (showBackButton) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF1E232E),
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable { onBackClick() }
+                        .testTag("settings_back_button")
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Geri",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+
+            AnimatedContent(
+                targetState = title,
+                transitionSpec = {
+                    fadeIn(tween(220)).togetherWith(fadeOut(tween(180)))
+                },
+                label = "topbar_title_anim"
+            ) { currentTitle ->
+                Text(
+                    text = currentTitle,
+                    fontFamily = UnboundedFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 28.sp,
+                    lineHeight = 34.sp,
+                    letterSpacing = (-0.5).sp,
+                    color = Color.White,
+                    modifier = Modifier.testTag("screen_top_title")
+                )
+            }
         }
     }
 }
