@@ -30,7 +30,11 @@ class MainActivity : ComponentActivity() {
         SmsCodeSource.init(this)
         enableEdgeToEdge()
         setContent {
-            MyApplicationTheme {
+            val userPrefs by viewModel.userPreferences.collectAsState()
+            MyApplicationTheme(
+                themeMode = userPrefs.themeMode,
+                colorPalette = userPrefs.colorPalette
+            ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     AppRoot(viewModel = viewModel)
                 }

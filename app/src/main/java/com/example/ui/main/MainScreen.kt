@@ -19,6 +19,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,7 +32,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -43,6 +47,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Check
@@ -127,6 +132,8 @@ import com.example.ui.theme.StatusInfo
 import com.example.ui.theme.StatusSuccess
 import com.example.ui.theme.StatusWarning
 import com.example.ui.theme.UnboundedFontFamily
+import com.example.ui.theme.AppPalettes
+import com.example.ui.theme.getPaletteAccent
 import com.example.ui.viewmodel.LogLevel
 import com.example.ui.viewmodel.PortalStep
 import com.example.ui.viewmodel.PortalViewModel
@@ -733,6 +740,10 @@ private fun SettingsTabContent(
                 viewModel = viewModel,
                 onStartDownload = onStartDownload
             )
+        } else if (subPage == "Görünüm") {
+            AppearanceSubPageContent(
+                viewModel = viewModel
+            )
         } else if (subPage != null) {
             SettingsSubPagePlaceholder(title = subPage)
         } else {
@@ -742,14 +753,18 @@ private fun SettingsTabContent(
                     .padding(horizontal = 20.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
-                // Grup 1 (Ağ Ayarları Kart Bloğu - RoundedCornerShape(20.dp), Zemin: #161A22)
+                // Grup 1 (Ağ Ayarları Kart Bloğu - RoundedCornerShape(20.dp))
                 item {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("settings_group_network"),
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF161A22))
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                        )
                     ) {
                         Column {
                             // 1. Öğe: "Kablosuz"
@@ -763,7 +778,7 @@ private fun SettingsTabContent(
 
                             // İnce ayırıcı çizgi
                             HorizontalDivider(
-                                color = Color(0xFF262A34),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                                 thickness = 1.dp,
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
@@ -785,14 +800,18 @@ private fun SettingsTabContent(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                // Grup 2 (Uygulama Tercihleri Bloğu - RoundedCornerShape(20.dp), Zemin: #161A22)
+                // Grup 2 (Uygulama Tercihleri Bloğu - RoundedCornerShape(20.dp))
                 item {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("settings_group_preferences"),
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF161A22))
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                        )
                     ) {
                         Column {
                             // 3. Öğe: "Görünüm"
@@ -806,7 +825,7 @@ private fun SettingsTabContent(
 
                             // İnce ayırıcı çizgi
                             HorizontalDivider(
-                                color = Color(0xFF262A34),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                                 thickness = 1.dp,
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
@@ -835,7 +854,7 @@ private fun SettingsTabContent(
                     ) {
                         Text(
                             text = "Hakkında",
-                            color = Color(0xFF8E95A5),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(start = 4.dp)
@@ -846,7 +865,11 @@ private fun SettingsTabContent(
                                 .fillMaxWidth()
                                 .testTag("settings_group_about"),
                             shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF161A22))
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                            )
                         ) {
                             SettingsMenuItem(
                                 icon = Icons.Default.Info,
@@ -882,7 +905,7 @@ private fun SettingsMenuItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClick()
             }
             .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -896,7 +919,7 @@ private fun SettingsMenuItem(
         ) {
             Surface(
                 shape = CircleShape,
-                color = Color(0xFF1E232E),
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.size(40.dp)
             ) {
                 Box(
@@ -906,7 +929,7 @@ private fun SettingsMenuItem(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = Color(0xFF9EC5EA),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -917,13 +940,13 @@ private fun SettingsMenuItem(
             ) {
                 Text(
                     text = title,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = subtitle,
-                    color = Color(0xFF8E95A5),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
             }
@@ -932,7 +955,7 @@ private fun SettingsMenuItem(
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = Color(0xFF626978),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.size(20.dp)
         )
     }
@@ -1216,7 +1239,11 @@ private fun UpdatesSubPageContent(
                     .fillMaxWidth()
                     .testTag("update_channel_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF161A22))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                )
             ) {
                 Column(
                     modifier = Modifier
@@ -1227,13 +1254,13 @@ private fun UpdatesSubPageContent(
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text = "Güncelleme Kanalı",
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = "Beta kanalı en yeni özellikleri, Kararlı kanalı test edilmiş sürümleri sunar.",
-                            color = Color(0xFF8E95A5),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp,
                             lineHeight = 18.sp
                         )
@@ -1243,7 +1270,7 @@ private fun UpdatesSubPageContent(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        color = Color(0xFF0F1218)
+                        color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Row(
                             modifier = Modifier
@@ -1260,12 +1287,12 @@ private fun UpdatesSubPageContent(
                                     .weight(1f)
                                     .clip(RoundedCornerShape(10.dp))
                                     .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         viewModel.setUpdateChannel("STABLE")
                                     }
                                     .testTag("channel_stable_option"),
                                 shape = RoundedCornerShape(10.dp),
-                                color = if (isStable) Color(0xFF1F2937) else Color.Transparent
+                                color = if (isStable) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
                             ) {
                                 Row(
                                     modifier = Modifier.padding(vertical = 10.dp),
@@ -1276,14 +1303,14 @@ private fun UpdatesSubPageContent(
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
-                                            tint = Color(0xFF9EC5EA),
+                                            tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                     }
                                     Text(
                                         text = "Kararlı",
-                                        color = if (isStable) Color.White else Color(0xFF8E95A5),
+                                        color = if (isStable) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 14.sp,
                                         fontWeight = if (isStable) FontWeight.Bold else FontWeight.Medium
                                     )
@@ -1296,12 +1323,12 @@ private fun UpdatesSubPageContent(
                                     .weight(1f)
                                     .clip(RoundedCornerShape(10.dp))
                                     .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         viewModel.setUpdateChannel("BETA")
                                     }
                                     .testTag("channel_beta_option"),
                                 shape = RoundedCornerShape(10.dp),
-                                color = if (isBeta) Color(0xFF1F2937) else Color.Transparent
+                                color = if (isBeta) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
                             ) {
                                 Row(
                                     modifier = Modifier.padding(vertical = 10.dp),
@@ -1312,14 +1339,14 @@ private fun UpdatesSubPageContent(
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
-                                            tint = Color(0xFF9EC5EA),
+                                            tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                     }
                                     Text(
                                         text = "Beta",
-                                        color = if (isBeta) Color.White else Color(0xFF8E95A5),
+                                        color = if (isBeta) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 14.sp,
                                         fontWeight = if (isBeta) FontWeight.Bold else FontWeight.Medium
                                     )
@@ -1338,7 +1365,11 @@ private fun UpdatesSubPageContent(
                     .fillMaxWidth()
                     .testTag("manual_update_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF161A22))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                )
             ) {
                 Column(
                     modifier = Modifier
@@ -1355,24 +1386,18 @@ private fun UpdatesSubPageContent(
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
                                 text = "Yüklü Sürüm",
-                                color = Color(0xFF8E95A5),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                             Text(
                                 text = "v${BuildConfig.VERSION_NAME}",
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = UnboundedFontFamily
                             )
                         }
 
-                        // En son sürüm bilgisi ve renk mantığı:
-                        // - Uygulama ilk açılışta kaydedilen sürüm değerleri (userPrefs.latestStableVersion / userPrefs.latestBetaVersion) kullanılır.
-                        // - Şuankiyle aynı ise: beyaz renkte
-                        // - Güncel yeni bir sürümse ve stable ise: yeşil renkte (#34D399)
-                        // - Güncel yeni bir sürümse ve beta ise: sarı renkte (#FBBF24)
-                        // - Sadece sürüm numarası ve "v" harfi o renkte olacak
                         val currentInstalled = BuildConfig.VERSION_NAME
                         val recordedVersion = if (currentChannel == "BETA") {
                             userPrefs.latestBetaVersion.ifBlank { userPrefs.latestStableVersion }
@@ -1385,19 +1410,18 @@ private fun UpdatesSubPageContent(
 
                         if (updateCheckState is UpdateCheckResult.Checking) {
                             latestVersionNumber = "Kontrol ediliyor..."
-                            latestVersionColor = Color(0xFF9EC5EA)
+                            latestVersionColor = MaterialTheme.colorScheme.primary
                         } else if (recordedVersion.isNotBlank()) {
                             latestVersionNumber = "v$recordedVersion"
                             val isNewer = UpdateManager.isVersionNewer(recordedVersion, currentInstalled)
                             latestVersionColor = if (isNewer) {
                                 if (currentChannel == "BETA") Color(0xFFFBBF24) else Color(0xFF34D399)
                             } else {
-                                Color.White // Şuankiyle aynı veya eski -> Beyaz
+                                MaterialTheme.colorScheme.onSurface
                             }
                         } else {
-                            // Henüz kaydedilmiş veri yoksa şuanki sürüm gösterilir
                             latestVersionNumber = "v$currentInstalled"
-                            latestVersionColor = Color.White
+                            latestVersionColor = MaterialTheme.colorScheme.onSurface
                         }
 
                         Column(
@@ -1406,7 +1430,7 @@ private fun UpdatesSubPageContent(
                         ) {
                             Text(
                                 text = "En Son Sürüm ($currentChannel)",
-                                color = Color(0xFF8E95A5),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                             Text(
@@ -1429,11 +1453,11 @@ private fun UpdatesSubPageContent(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
                                 strokeWidth = 2.dp,
-                                color = Color(0xFF9EC5EA)
+                                color = MaterialTheme.colorScheme.primary
                             )
                             Text(
                                 text = "GitHub sunucusu üzerinden denetleniyor...",
-                                color = Color(0xFF8E95A5),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 13.sp
                             )
                         }
@@ -1445,7 +1469,7 @@ private fun UpdatesSubPageContent(
 
                     Button(
                         onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             if (isUpdateAvailable) {
                                 val available = updateCheckState as UpdateCheckResult.UpdateAvailable
                                 onStartDownload(available.apkAsset, available.newVersion)
@@ -1461,15 +1485,15 @@ private fun UpdatesSubPageContent(
                             .testTag("action_update_button"),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isUpdateAvailable) Color(0xFF10B981) else Color(0xFF2563EB),
-                            contentColor = Color.White
+                            containerColor = if (isUpdateAvailable) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
                         )
                     ) {
                         if (isChecking) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onPrimary
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Denetleniyor...", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
@@ -1495,14 +1519,18 @@ private fun UpdatesSubPageContent(
             }
         }
 
-        // 3. Blok: Açılışta Denetleme (Switch) - Alta taşındı
+        // 3. Blok: Açılışta Denetleme (Switch)
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("auto_check_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF161A22))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                )
             ) {
                 Row(
                     modifier = Modifier
@@ -1517,13 +1545,13 @@ private fun UpdatesSubPageContent(
                     ) {
                         Text(
                             text = "Açılışta Kontrol Et",
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = "Uygulama her başladığında arka planda yeni sürüm olup olmadığını denetler.",
-                            color = Color(0xFF8E95A5),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp,
                             lineHeight = 18.sp
                         )
@@ -1534,11 +1562,276 @@ private fun UpdatesSubPageContent(
                     Switch(
                         checked = isAutoCheck,
                         onCheckedChange = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             viewModel.setCheckUpdatesOnLaunch(it)
                         },
                         modifier = Modifier.testTag("auto_check_switch")
                     )
+                }
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// GÖRÜNÜM ALT SAYFASI (TEMA & RENK PALETİ SEÇİMİ)
+// -------------------------------------------------------------
+@Composable
+private fun AppearanceSubPageContent(
+    viewModel: PortalViewModel
+) {
+    val userPrefs by viewModel.userPreferences.collectAsState()
+    val currentThemeMode = userPrefs.themeMode // "SYSTEM", "LIGHT", "DARK"
+    val currentPalette = userPrefs.colorPalette // "DYNAMIC", "OCEAN", "SAKURA", "MACHA", "ESPRESSO", "LAVENDER"
+    val haptic = LocalHapticFeedback.current
+
+    // Aktif temanın vurgu rengi
+    val activeAccentColor = getPaletteAccent(currentPalette)
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 1. Blok: "Tema" Kartı
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("theme_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Sol Taraf: Dikey ortalanmış hilal / ay ikonu (~24.dp) ve başlık
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DarkMode,
+                            contentDescription = "Tema",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "Tema",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    // Sağ Taraf: 3 seçenekli yan yana Segmented Buton Grubu: "Sistem", "Aydınlık", "Karanlık"
+                    val themeOptions = listOf(
+                        "SYSTEM" to "Sistem",
+                        "LIGHT" to "Aydınlık",
+                        "DARK" to "Karanlık"
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            themeOptions.forEach { (modeKey, modeTitle) ->
+                                val isSelected = currentThemeMode == modeKey
+
+                                val pillColor = if (isSelected) activeAccentColor else Color.Transparent
+                                val textColor = if (isSelected) {
+                                    Color(0xFF0F172A)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+
+                                Surface(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable {
+                                            if (!isSelected) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                viewModel.setThemeMode(modeKey)
+                                            }
+                                        }
+                                        .testTag("theme_option_${modeKey.lowercase()}"),
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = pillColor
+                                ) {
+                                    Text(
+                                        text = modeTitle,
+                                        color = textColor,
+                                        fontSize = 13.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Blok: "Renk paleti" Kartı
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("color_palette_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Başlık ve Sol Taraf İkonu
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "Renk paleti",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // 6 seçenek yan yana listelenir (LazyRow): [Dinamik] | [Okyanus] | [Sakura] | [Maça] | [Espresso] | [Lavanta]
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
+                    ) {
+                        items(AppPalettes) { palette ->
+                            val isSelected = currentPalette == palette.id
+
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = if (isSelected) palette.primaryColor.copy(alpha = 0.16f) else Color.Transparent,
+                                border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, palette.primaryColor.copy(alpha = 0.5f)) else null,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .clickable {
+                                        if (!isSelected) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            viewModel.setColorPalette(palette.id)
+                                        }
+                                    }
+                                    .testTag("palette_option_${palette.id.lowercase()}")
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp)
+                                ) {
+                                    // Çember Renk Önizlemesi (64.dp)
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.size(64.dp)
+                                    ) {
+                                        // 3 Renk Dilimine Bölünmüş Daire:
+                                        // - Sol üst çeyrek dilim: Paletin 1. rengi (Primary)
+                                        // - Sağ üst çeyrek dilim: Paletin 2. rengi (Tertiary / Container)
+                                        // - Alt yarım dilim: Paletin 3. rengi (Secondary / Accent)
+                                        Canvas(
+                                            modifier = Modifier
+                                                .size(60.dp)
+                                                .clip(CircleShape)
+                                        ) {
+                                            val canvasSize = size
+
+                                            // Sol üst çeyrek dilim (Primary): 180°'den 90° süpürür
+                                            drawArc(
+                                                color = palette.primaryColor,
+                                                startAngle = 180f,
+                                                sweepAngle = 90f,
+                                                useCenter = true,
+                                                size = canvasSize
+                                            )
+
+                                            // Sağ üst çeyrek dilim (Tertiary): 270°'den 90° süpürür
+                                            drawArc(
+                                                color = palette.tertiaryColor,
+                                                startAngle = 270f,
+                                                sweepAngle = 90f,
+                                                useCenter = true,
+                                                size = canvasSize
+                                            )
+
+                                            // Alt yarım dilim (Secondary): 0°'den 180° süpürür
+                                            drawArc(
+                                                color = palette.secondaryColor,
+                                                startAngle = 0f,
+                                                sweepAngle = 180f,
+                                                useCenter = true,
+                                                size = canvasSize
+                                            )
+                                        }
+
+                                        // Seçili olan paletin merkezinde beyaz onay işareti
+                                        if (isSelected) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = Color(0xB3000000),
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Check,
+                                                        contentDescription = "Seçili",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Alt Etiket
+                                    Text(
+                                        text = palette.name,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 13.sp,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -2145,7 +2438,7 @@ private fun ConnectionsTabContent() {
         ) {
             Surface(
                 shape = CircleShape,
-                color = Color(0xFF161A22),
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.size(80.dp)
             ) {
                 Box(
@@ -2155,7 +2448,7 @@ private fun ConnectionsTabContent() {
                     Icon(
                         imageVector = Icons.Default.AccountTree,
                         contentDescription = null,
-                        tint = Color(0xFF9EC5EA),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(36.dp)
                     )
                 }
@@ -2163,7 +2456,7 @@ private fun ConnectionsTabContent() {
 
             Text(
                 text = "Bağlantılar",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
@@ -2171,7 +2464,7 @@ private fun ConnectionsTabContent() {
 
             Text(
                 text = "Kayıtlı kütüphane ağları ve geçmiş bağlantı noktaları burada listelenecektir.",
-                color = Color(0xFF8E95A5),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
                 lineHeight = 20.sp
@@ -2205,12 +2498,12 @@ private fun TopBarSection(
             if (showBackButton) {
                 Surface(
                     shape = CircleShape,
-                    color = Color(0xFF1E232E),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
                         .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onBackClick()
                         }
                         .testTag("settings_back_button")
@@ -2222,7 +2515,7 @@ private fun TopBarSection(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Geri",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -2244,7 +2537,7 @@ private fun TopBarSection(
                     fontSize = 28.sp,
                     lineHeight = 34.sp,
                     letterSpacing = (-0.5).sp,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.testTag("screen_top_title")
                 )
             }
@@ -2262,10 +2555,15 @@ private fun CustomBottomBar(
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
+    val isDark = isSystemInDarkTheme()
 
     Surface(
-        color = Color(0xFF12151D),
+        color = MaterialTheme.colorScheme.surface,
         tonalElevation = 8.dp,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+        ),
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
@@ -2273,7 +2571,7 @@ private fun CustomBottomBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 14.dp, vertical = 7.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2292,25 +2590,25 @@ private fun CustomBottomBar(
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
                             if (!isSelected) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onTabSelected(tab)
                             }
                         }
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
                         .testTag("tab_" + tab.name.lowercase())
                 ) {
                     val pillModifier = if (isSelected) {
                         Modifier
                             .offset(y = iconOffsetY)
                             .background(
-                                color = Color(0xFF1B2E48),
+                                color = MaterialTheme.colorScheme.primaryContainer,
                                 shape = RoundedCornerShape(12.dp)
                             )
-                            .padding(horizontal = 18.dp, vertical = 4.dp)
+                            .padding(horizontal = 22.dp, vertical = 5.dp)
                     } else {
                         Modifier
                             .offset(y = iconOffsetY)
-                            .padding(horizontal = 14.dp, vertical = 4.dp)
+                            .padding(horizontal = 16.dp, vertical = 5.dp)
                     }
 
                     Box(
@@ -2320,7 +2618,7 @@ private fun CustomBottomBar(
                         Icon(
                             imageVector = tab.icon,
                             contentDescription = tab.title,
-                            tint = if (isSelected) Color(0xFF9EC5EA) else Color(0xFF8E95A5),
+                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -2328,7 +2626,7 @@ private fun CustomBottomBar(
                     if (isSelected) {
                         Text(
                             text = tab.title,
-                            color = Color(0xFF9EC5EA),
+                            color = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             lineHeight = 13.sp

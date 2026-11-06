@@ -81,7 +81,11 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 isOnboardingCompleted = false,
                 isAutoConnectEnabled = false,
                 updateChannel = "STABLE",
-                checkUpdatesOnLaunch = true
+                checkUpdatesOnLaunch = true,
+                latestStableVersion = "",
+                latestBetaVersion = "",
+                themeMode = "DARK",
+                colorPalette = "OCEAN"
             )
         )
 
@@ -137,6 +141,20 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             userPrefsRepo.setCheckUpdatesOnLaunch(enabled)
             addLog(LogLevel.INFO, "Açılışta güncelleme kontrolü: " + if (enabled) "Aktif" else "Devre Dışı")
+        }
+    }
+
+    fun setThemeMode(mode: String) {
+        viewModelScope.launch {
+            userPrefsRepo.setThemeMode(mode)
+            addLog(LogLevel.INFO, "Tema modu seçildi: $mode")
+        }
+    }
+
+    fun setColorPalette(palette: String) {
+        viewModelScope.launch {
+            userPrefsRepo.setColorPalette(palette)
+            addLog(LogLevel.INFO, "Renk paleti seçildi: $palette")
         }
     }
 

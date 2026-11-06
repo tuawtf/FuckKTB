@@ -22,7 +22,9 @@ data class UserPreferences(
     val updateChannel: String = "STABLE",
     val checkUpdatesOnLaunch: Boolean = true,
     val latestStableVersion: String = "",
-    val latestBetaVersion: String = ""
+    val latestBetaVersion: String = "",
+    val themeMode: String = "DARK",
+    val colorPalette: String = "OCEAN"
 )
 
 class UserPreferencesRepository(private val context: Context) {
@@ -35,6 +37,8 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_CHECK_UPDATES_ON_LAUNCH = booleanPreferencesKey("check_updates_on_launch")
         val KEY_LATEST_STABLE_VERSION = stringPreferencesKey("latest_stable_version")
         val KEY_LATEST_BETA_VERSION = stringPreferencesKey("latest_beta_version")
+        val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        val KEY_COLOR_PALETTE = stringPreferencesKey("color_palette")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -53,6 +57,8 @@ class UserPreferencesRepository(private val context: Context) {
             val checkUpdatesOnLaunch = preferences[KEY_CHECK_UPDATES_ON_LAUNCH] ?: true
             val latestStableVersion = preferences[KEY_LATEST_STABLE_VERSION].orEmpty()
             val latestBetaVersion = preferences[KEY_LATEST_BETA_VERSION].orEmpty()
+            val themeMode = preferences[KEY_THEME_MODE] ?: "DARK"
+            val colorPalette = preferences[KEY_COLOR_PALETTE] ?: "OCEAN"
             UserPreferences(
                 phoneNumber = phoneNumber,
                 isOnboardingCompleted = isOnboardingCompleted,
@@ -60,7 +66,9 @@ class UserPreferencesRepository(private val context: Context) {
                 updateChannel = updateChannel,
                 checkUpdatesOnLaunch = checkUpdatesOnLaunch,
                 latestStableVersion = latestStableVersion,
-                latestBetaVersion = latestBetaVersion
+                latestBetaVersion = latestBetaVersion,
+                themeMode = themeMode,
+                colorPalette = colorPalette
             )
         }
 
@@ -103,6 +111,18 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setLatestBetaVersion(version: String) {
         context.dataStore.edit { preferences ->
             preferences[KEY_LATEST_BETA_VERSION] = version
+        }
+    }
+
+    suspend fun setThemeMode(mode: String) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_THEME_MODE] = mode
+        }
+    }
+
+    suspend fun setColorPalette(palette: String) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_COLOR_PALETTE] = palette
         }
     }
 
