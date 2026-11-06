@@ -35,7 +35,8 @@ class MainActivity : ComponentActivity() {
             val userPrefs by viewModel.userPreferences.collectAsState()
             MyApplicationTheme(
                 themeMode = userPrefs.themeMode,
-                colorPalette = userPrefs.colorPalette
+                colorPalette = userPrefs.colorPalette,
+                isAmoledMode = userPrefs.isAmoledMode
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),

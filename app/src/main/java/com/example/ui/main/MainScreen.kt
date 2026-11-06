@@ -121,7 +121,6 @@ import com.example.data.UpdateCheckResult
 import com.example.data.UpdateManager
 import com.example.ui.navigation.MainTab
 import com.example.ui.theme.IconColors
-import com.example.ui.theme.LocalIsDarkTheme
 import com.example.ui.theme.UnboundedFontFamily
 import com.example.ui.theme.getAppPalettes
 import com.example.ui.viewmodel.LogLevel
@@ -265,7 +264,6 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Üst Bilgi: Bağlı Ağ ve Yenileme
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -305,13 +303,11 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
             }
         }
 
-        // Merkez: Durum Kartı ve Büyük Bağlan Butonu
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Dinamik Durum Kartı
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -378,7 +374,6 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
             }
 
             val context = LocalContext.current
-            // BÜYÜK MERKEZİ BAĞLAN BUTONU
             val buttonBgColor = when (uiState.step) {
                 PortalStep.SUCCESS -> IconColors.SuccessGreen
                 PortalStep.WAITING_SMS -> MaterialTheme.colorScheme.primary
@@ -495,7 +490,6 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
                 }
             }
 
-            // Alt Yardımcı Butonlar
             AnimatedVisibility(
                 visible = uiState.step == PortalStep.WAITING_SMS || uiState.step == PortalStep.ERROR,
                 enter = fadeIn(),
@@ -523,7 +517,6 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
             }
         }
 
-        // Alt Bilgi Notu
         Text(
             text = "Kayıtlı Numara: " + PhoneUtils.formatForDisplay(uiState.phoneNumber),
             style = MaterialTheme.typography.bodySmall,
@@ -563,7 +556,6 @@ private fun LogsTabContent(viewModel: PortalViewModel) {
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Toolbar: Günlük başlığı ve hızlı eylem butonları
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -706,7 +698,6 @@ private fun LogsTabContent(viewModel: PortalViewModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Test Simülasyon Butonu
         OutlinedButton(
             onClick = { viewModel.simulateSmsArrival() },
             modifier = Modifier
@@ -755,7 +746,6 @@ private fun SettingsTabContent(
                     .padding(horizontal = 20.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
-                // Grup 1 (Ağ Ayarları Kart Bloğu)
                 item {
                     Card(
                         modifier = Modifier
@@ -798,7 +788,6 @@ private fun SettingsTabContent(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                // Grup 2 (Uygulama Tercihleri Bloğu)
                 item {
                     Card(
                         modifier = Modifier
@@ -841,7 +830,6 @@ private fun SettingsTabContent(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
 
-                // Grup 3: Hakkında
                 item {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -993,7 +981,6 @@ private fun UpdatesSubPageContent(
         }
     }
 
-    // Uygulamanız Güncel Alt Paneli
     if (showUpToDateSheet != null) {
         val upToDateData = showUpToDateSheet!!
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1136,7 +1123,6 @@ private fun UpdatesSubPageContent(
         }
     }
 
-    // Hata Alt Paneli
     if (showErrorSheet != null) {
         val errorMessage = showErrorSheet!!
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1230,7 +1216,6 @@ private fun UpdatesSubPageContent(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Blok: Güncelleme Kanalı
         item {
             Card(
                 modifier = Modifier
@@ -1353,7 +1338,6 @@ private fun UpdatesSubPageContent(
             }
         }
 
-        // 2. Blok: Manuel Güncelleme Kartı
         item {
             Card(
                 modifier = Modifier
@@ -1511,7 +1495,6 @@ private fun UpdatesSubPageContent(
             }
         }
 
-        // 3. Blok: Açılışta Denetleme
         item {
             Card(
                 modifier = Modifier
@@ -1570,7 +1553,7 @@ private fun UpdatesSubPageContent(
 }
 
 // -------------------------------------------------------------
-// GÖRÜNÜM ALT SAYFASI (TEMA & RENK PALETİ SEÇİMİ)
+// GÖRÜNÜM ALT SAYFASI (TEMA, RENK PALETİ VE AMOLED SWITCH)
 // -------------------------------------------------------------
 @Composable
 private fun AppearanceSubPageContent(
@@ -1579,6 +1562,7 @@ private fun AppearanceSubPageContent(
     val userPrefs by viewModel.userPreferences.collectAsState()
     val currentThemeMode = userPrefs.themeMode
     val currentPalette = userPrefs.colorPalette
+    val isAmoledMode = userPrefs.isAmoledMode
     val haptic = LocalHapticFeedback.current
 
     val appPalettes = getAppPalettes()
@@ -1757,7 +1741,6 @@ private fun AppearanceSubPageContent(
                                         ) {
                                             val canvasSize = size
 
-                                            // 1. Sol üst dilim (Primary)
                                             drawArc(
                                                 color = palette.primaryColor,
                                                 startAngle = 180f,
@@ -1766,7 +1749,6 @@ private fun AppearanceSubPageContent(
                                                 size = canvasSize
                                             )
 
-                                            // 2. Sağ üst dilim (Tertiary)
                                             drawArc(
                                                 color = palette.tertiaryColor,
                                                 startAngle = 270f,
@@ -1775,7 +1757,6 @@ private fun AppearanceSubPageContent(
                                                 size = canvasSize
                                             )
 
-                                            // 3. Alt yarım dilim (Secondary)
                                             drawArc(
                                                 color = palette.secondaryColor,
                                                 startAngle = 0f,
@@ -1784,7 +1765,6 @@ private fun AppearanceSubPageContent(
                                                 size = canvasSize
                                             )
 
-                                            // Daire etrafına 1.dp belirgin ince kenarlık
                                             drawCircle(
                                                 color = outlineBorderColor,
                                                 radius = (canvasSize.minDimension / 2f) - 1f,
@@ -1821,6 +1801,58 @@ private fun AppearanceSubPageContent(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // 3. Blok: Amoled görünüm Switch Kartı
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("amoled_mode_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Amoled görünüm",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Karanlık temada katran siyahı (#000000) arka plan kullanır.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Switch(
+                        checked = isAmoledMode,
+                        onCheckedChange = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.setAmoledMode(it)
+                        },
+                        modifier = Modifier.testTag("amoled_mode_switch")
+                    )
                 }
             }
         }
@@ -2493,19 +2525,18 @@ private fun CustomBottomBar(
     val haptic = LocalHapticFeedback.current
 
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 0.dp,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
         ),
-        modifier = modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 14.dp, vertical = 7.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically

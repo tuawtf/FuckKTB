@@ -45,7 +45,6 @@ data class PaletteOption(
 /**
  * Available color palettes.
  * API 31+ includes "Dinamik" (Material You). API < 31 hides "Dinamik".
- * AMOLED is the 7th palette.
  */
 @Composable
 fun getAppPalettes(): List<PaletteOption> {
@@ -101,13 +100,6 @@ fun getAppPalettes(): List<PaletteOption> {
                 primaryColor = LavenderPrimary,
                 tertiaryColor = Color(0xFFA855F7),
                 secondaryColor = LavenderSecondary
-            ),
-            PaletteOption(
-                id = "AMOLED",
-                name = "Amoled",
-                primaryColor = Color(0xFFE2E8F0),
-                tertiaryColor = Color(0xFF6B7280),
-                secondaryColor = Color(0xFF9CA3AF)
             )
         )
     )
@@ -494,44 +486,6 @@ val LavenderLightColorScheme = lightColorScheme(
     onError = Color.White
 )
 
-// 6. AMOLED (Always pure dark black base)
-val AmoledDarkColorScheme = darkColorScheme(
-    primary = Color(0xFFE2E8F0),
-    onPrimary = Color(0xFF000000),
-    primaryContainer = Color(0xFF1F1F1F),
-    onPrimaryContainer = Color(0xFFF1F5F9),
-    secondary = Color(0xFF9CA3AF),
-    onSecondary = Color(0xFF000000),
-    secondaryContainer = Color(0xFF1A1A1A),
-    onSecondaryContainer = Color(0xFFE2E8F0),
-    tertiary = Color(0xFF6B7280),
-    onTertiary = Color(0xFF000000),
-    tertiaryContainer = Color(0xFF262626),
-    onTertiaryContainer = Color(0xFFF1F5F9),
-    background = Color(0xFF000000),
-    onBackground = Color(0xFFE5E7EB),
-    surface = Color(0xFF000000),
-    onSurface = Color(0xFFE5E7EB),
-    surfaceVariant = Color(0xFF121212),
-    onSurfaceVariant = Color(0xFF9CA3AF),
-    surfaceContainerLowest = Color(0xFF000000),
-    surfaceContainerLow = Color(0xFF080808),
-    surfaceContainer = Color(0xFF0D0D0D),
-    surfaceContainerHigh = Color(0xFF141414),
-    surfaceContainerHighest = Color(0xFF1C1C1C),
-    surfaceBright = Color(0xFF262626),
-    surfaceDim = Color(0xFF080808),
-    inverseSurface = Color(0xFFE5E7EB),
-    inverseOnSurface = Color(0xFF000000),
-    inversePrimary = Color(0xFF334155),
-    outline = Color(0xFF3A3A3A),
-    outlineVariant = Color(0xFF262626),
-    scrim = Color(0xFF000000),
-    surfaceTint = Color(0xFFE2E8F0),
-    error = IconColors.ErrorRed,
-    onError = Color.White
-)
-
 /**
  * Animated ColorScheme generator to ensure smooth ~300ms transitions when theme/palette changes.
  */
@@ -583,22 +537,20 @@ private fun animateColorScheme(target: ColorScheme): ColorScheme {
 @Composable
 fun MyApplicationTheme(
     themeMode: String = "DARK", // "SYSTEM", "LIGHT", "DARK"
-    colorPalette: String = "OCEAN", // "DYNAMIC", "OCEAN", "SAKURA", "MACHA", "ESPRESSO", "LAVENDER", "AMOLED"
+    colorPalette: String = "OCEAN", // "DYNAMIC", "OCEAN", "SAKURA", "MACHA", "ESPRESSO", "LAVENDER"
+    isAmoledMode: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val systemInDark = isSystemInDarkTheme()
 
-    // KESİN KURAL: AMOLED seçiliyse efektif tema HER ZAMAN KOYUDUR!
-    val effectiveDarkTheme = when {
-        colorPalette == "AMOLED" -> true
-        themeMode == "LIGHT" -> false
-        themeMode == "DARK" -> true
+    val effectiveDarkTheme = when (themeMode) {
+        "LIGHT" -> false
+        "DARK" -> true
         else -> systemInDark
     }
 
     val context = LocalContext.current
-    val rawTargetColorScheme: ColorScheme = when {
-        colorPalette == "AMOLED" -> AmoledDarkColorScheme
+    var rawTargetColorScheme: ColorScheme = when {
         colorPalette == "DYNAMIC" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             if (effectiveDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
@@ -607,6 +559,20 @@ fun MyApplicationTheme(
         colorPalette == "ESPRESSO" -> if (effectiveDarkTheme) EspressoDarkColorScheme else EspressoLightColorScheme
         colorPalette == "LAVENDER" -> if (effectiveDarkTheme) LavenderDarkColorScheme else LavenderLightColorScheme
         else -> if (effectiveDarkTheme) OceanDarkColorScheme else OceanLightColorScheme
+    }
+
+    // Amoled görünüm aktifse ve karanlık temadaysak zeminleri katran siyahı (#000000) yap
+    if (effectiveDarkTheme && isAmoledMode) {
+        rawTargetColorScheme = rawTargetColorScheme.copy(
+            background = Color(0xFF000000),
+            surface = Color(0xFF000000),
+            surfaceContainerLowest = Color(0xFF000000),
+            surfaceContainerLow = Color(0xFF080808),
+            surfaceContainer = Color(0xFF0A0A0A),
+            surfaceContainerHigh = Color(0xFF121212),
+            surfaceContainerHighest = Color(0xFF1A1A1A),
+            surfaceDim = Color(0xFF080808)
+        )
     }
 
     val animatedColorScheme = animateColorScheme(rawTargetColorScheme)
@@ -628,7 +594,6 @@ fun MyApplicationTheme(
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
 
-        // Flaslarin önüne geçmek için windowBackground dynamic olarak set edilir
         window.setBackgroundDrawable(ColorDrawable(animatedColorScheme.background.toArgb()))
     }
 

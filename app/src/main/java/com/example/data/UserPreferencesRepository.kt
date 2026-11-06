@@ -25,7 +25,8 @@ data class UserPreferences(
     val latestStableVersion: String = "",
     val latestBetaVersion: String = "",
     val themeMode: String = "DARK",
-    val colorPalette: String = "OCEAN"
+    val colorPalette: String = "OCEAN",
+    val isAmoledMode: Boolean = false
 )
 
 class UserPreferencesRepository(private val context: Context) {
@@ -40,9 +41,10 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_LATEST_BETA_VERSION = stringPreferencesKey("latest_beta_version")
         val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         val KEY_COLOR_PALETTE = stringPreferencesKey("color_palette")
+        val KEY_AMOLED_MODE = booleanPreferencesKey("amoled_mode")
 
         private val VALID_THEME_MODES = setOf("SYSTEM", "LIGHT", "DARK")
-        private val VALID_PALETTES = setOf("DYNAMIC", "OCEAN", "SAKURA", "MACHA", "ESPRESSO", "LAVENDER", "AMOLED")
+        private val VALID_PALETTES = setOf("DYNAMIC", "OCEAN", "SAKURA", "MACHA", "ESPRESSO", "LAVENDER")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -61,6 +63,7 @@ class UserPreferencesRepository(private val context: Context) {
             val checkUpdatesOnLaunch = preferences[KEY_CHECK_UPDATES_ON_LAUNCH] ?: true
             val latestStableVersion = preferences[KEY_LATEST_STABLE_VERSION].orEmpty()
             val latestBetaVersion = preferences[KEY_LATEST_BETA_VERSION].orEmpty()
+            val isAmoledMode = preferences[KEY_AMOLED_MODE] ?: false
 
             var rawThemeMode = preferences[KEY_THEME_MODE] ?: "DARK"
             if (rawThemeMode !in VALID_THEME_MODES) {
@@ -86,7 +89,8 @@ class UserPreferencesRepository(private val context: Context) {
                 latestStableVersion = latestStableVersion,
                 latestBetaVersion = latestBetaVersion,
                 themeMode = rawThemeMode,
-                colorPalette = rawPalette
+                colorPalette = rawPalette,
+                isAmoledMode = isAmoledMode
             )
         }
 
@@ -146,6 +150,12 @@ class UserPreferencesRepository(private val context: Context) {
         }
         context.dataStore.edit { preferences ->
             preferences[KEY_COLOR_PALETTE] = safePalette
+        }
+    }
+
+    suspend fun setAmoledMode(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_AMOLED_MODE] = enabled
         }
     }
 
