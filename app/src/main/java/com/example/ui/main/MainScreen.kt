@@ -81,6 +81,22 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import android.content.Intent
+import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.AccountBox
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
+import com.example.SmsCodeSource
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
@@ -98,8 +114,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -110,6 +129,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import kotlinx.coroutines.delay
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -135,7 +155,7 @@ fun MainScreen(
     onResetOnboarding: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(MainTab.HOME) }
-    var activeSettingsSubPage by remember { mutableStateOf<String?>(null) }
+    var activeSubPage by remember { mutableStateOf<String?>(null) }
     var showUpdateBottomSheet by remember { mutableStateOf(false) }
     var hasAutoOpenedSheetOnLaunch by remember { mutableStateOf(false) }
 
@@ -157,8 +177,8 @@ fun MainScreen(
         showUpdateBottomSheet = false
     }
 
-    BackHandler(enabled = !showUpdateBottomSheet && selectedTab == MainTab.SETTINGS && activeSettingsSubPage != null) {
-        activeSettingsSubPage = null
+    BackHandler(enabled = !showUpdateBottomSheet && activeSubPage != null) {
+        activeSubPage = null
     }
 
     Scaffold(
@@ -166,13 +186,9 @@ fun MainScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopBarSection(
-                title = if (selectedTab == MainTab.SETTINGS && activeSettingsSubPage != null) {
-                    activeSettingsSubPage ?: selectedTab.title
-                } else {
-                    selectedTab.title
-                },
-                showBackButton = selectedTab == MainTab.SETTINGS && activeSettingsSubPage != null,
-                onBackClick = { activeSettingsSubPage = null }
+                title = activeSubPage ?: selectedTab.title,
+                showBackButton = activeSubPage != null,
+                onBackClick = { activeSubPage = null }
             )
         },
         bottomBar = {
@@ -180,9 +196,7 @@ fun MainScreen(
                 selectedTab = selectedTab,
                 onTabSelected = {
                     selectedTab = it
-                    if (it != MainTab.SETTINGS) {
-                        activeSettingsSubPage = null
-                    }
+                    activeSubPage = null
                 }
             )
         }
@@ -199,12 +213,16 @@ fun MainScreen(
             ) { tab ->
                 when (tab) {
                     MainTab.HOME -> ConnectTabContent(viewModel = viewModel)
-                    MainTab.CONNECTIONS -> ConnectionsTabContent()
+                    MainTab.CONNECTIONS -> ConnectionsTabContent(
+                        activeSubPage = activeSubPage,
+                        viewModel = viewModel,
+                        onSelectSubPage = { activeSubPage = it }
+                    )
                     MainTab.LOGS -> LogsTabContent(viewModel = viewModel)
                     MainTab.SETTINGS -> SettingsTabContent(
-                        activeSubPage = activeSettingsSubPage,
+                        activeSubPage = activeSubPage,
                         viewModel = viewModel,
-                        onSelectSubPage = { activeSettingsSubPage = it },
+                        onSelectSubPage = { activeSubPage = it },
                         onStartDownload = { asset, ver ->
                             viewModel.startApkDownload(asset, ver)
                             showUpdateBottomSheet = true
@@ -2403,50 +2421,1069 @@ private fun ManualCodeDialog(
 // 2. SEKME: BAĞLANTILAR (CONNECTIONS)
 // -------------------------------------------------------------
 @Composable
-private fun ConnectionsTabContent() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
+private fun ConnectionsTabContent(
+    activeSubPage: String?,
+    viewModel: PortalViewModel,
+    onSelectSubPage: (String) -> Unit
+) {
+    if (activeSubPage == "Profilim") {
+        ProfileSubPageContent(
+            viewModel = viewModel,
+            onFinishSetup = { onSelectSubPage("") }
+        )
+    } else {
+        val userPrefs by viewModel.userPreferences.collectAsState()
+        val isProfileCreated = userPrefs.isProfileCreated
+        val haptic = LocalHapticFeedback.current
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.size(80.dp)
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AccountTree,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(36.dp)
+            // 1. Üst Kısım: "Bağlantı Profilim" Kartı
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onSelectSubPage("Profilim")
+                        }
+                        .testTag("connection_profile_card"),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
                     )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (isProfileCreated) IconColors.SuccessGreen.copy(alpha = 0.15f) else Color(0xFFF59E0B).copy(alpha = 0.15f),
+                                    modifier = Modifier.size(38.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = if (isProfileCreated) Icons.Default.CheckCircle else Icons.Default.AccountBox,
+                                            contentDescription = null,
+                                            tint = if (isProfileCreated) IconColors.SuccessGreen else Color(0xFFF59E0B),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = "Bağlantı Profilim",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            if (isProfileCreated) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = IconColors.SuccessGreen.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "Profil Aktif",
+                                        color = IconColors.SuccessGreen,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (!isProfileCreated) {
+                            // Profiliniz oluşturulmadı Uyarısı
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color(0xFF332A15),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ErrorOutline,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF59E0B),
+                                        modifier = Modifier.size(26.dp)
+                                    )
+
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = "Profiliniz oluşturulmadı.",
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "KTB Wi-Fi otomatik giriş profili oluşturmak için dokunun.",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 13.sp,
+                                            lineHeight = 18.sp
+                                        )
+                                    }
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onSelectSubPage("Profilim")
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(46.dp)
+                                    .testTag("start_profile_setup_button"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            ) {
+                                Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Kurulum Yap", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            // Profil Detayları
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Kullanıcı Adı:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                                    Text(userPrefs.profileUsername, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Erişim Şifresi / Token:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                                    Text(userPrefs.profilePassword, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onSelectSubPage("Profilim")
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Yeniden Yapılandır", fontSize = 13.sp)
+                                }
+
+                                TextButton(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        viewModel.clearConnectionProfile()
+                                    },
+                                    modifier = Modifier.height(42.dp)
+                                ) {
+                                    Text("Profili Sil", color = IconColors.ErrorRed, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
-            Text(
-                text = "Bağlantılar",
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
+            // 2. Kısım: "Kayıtlı Kütüphane Ağları" Kartı
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Wifi,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Text(
+                                text = "Kayıtlı Kütüphane Ağları",
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
 
-            Text(
-                text = "Kayıtlı kütüphane ağları ve geçmiş bağlantı noktaları burada listelenecektir.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-                lineHeight = 20.sp
-            )
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = "KTB-Misafir",
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Kültür ve Turizm Bakanlığı Kütüphaneleri",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 12.sp
+                                    )
+                                }
+
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = IconColors.SuccessGreen,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// "PROFİLİM" KURULUM SİHİRBAZI (ProfileSubPageContent)
+// -------------------------------------------------------------
+private fun Context.findActivity(): ComponentActivity? {
+    var ctx = this
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is ComponentActivity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
+
+@Composable
+private fun ProfileSubPageContent(
+    viewModel: PortalViewModel,
+    onFinishSetup: () -> Unit
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val userPrefs by viewModel.userPreferences.collectAsState()
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val coroutineScope = rememberCoroutineScope()
+
+    var currentStep by remember { mutableIntStateOf(1) }
+
+    var phoneDigits by remember {
+        mutableStateOf(
+            if (userPrefs.phoneNumber.isNotBlank()) {
+                userPrefs.phoneNumber.filter { it.isDigit() }.takeLast(10)
+            } else if (uiState.phoneNumber.isNotBlank()) {
+                uiState.phoneNumber.filter { it.isDigit() }.takeLast(10)
+            } else {
+                "5551234567"
+            }
+        )
+    }
+
+    var showPhoneEditDialog by remember { mutableStateOf(false) }
+
+    var codeInput by remember { mutableStateOf("") }
+    var isValidating by remember { mutableStateOf(false) }
+    var validationError by remember { mutableStateOf<String?>(null) }
+    var isErrorCode by remember { mutableStateOf(false) }
+
+    val focusRequester = remember { FocusRequester() }
+
+    var extractedUsername by remember { mutableStateOf("") }
+    var extractedPassword by remember { mutableStateOf("") }
+
+    LaunchedEffect(uiState.verificationCode) {
+        if (uiState.verificationCode.isNotBlank() && currentStep == 3) {
+            codeInput = uiState.verificationCode
+        }
+    }
+
+    LaunchedEffect(currentStep) {
+        if (currentStep == 3) {
+            delay(250)
+            focusRequester.requestFocus()
+        }
+    }
+
+    // Otomatik SMS Kod Doğrulama (6 hane girilince başlar)
+    LaunchedEffect(codeInput) {
+        if (codeInput.length == 6 && !isValidating && !isErrorCode && currentStep == 3) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            isValidating = true
+            validationError = null
+
+            val phone = com.example.util.PhoneUtils.normalizePhoneNumber("0$phoneDigits")
+            val res = viewModel.validateSmsTokenForProfile(phone, codeInput)
+            isValidating = false
+            if (res.isSuccess) {
+                val (user, pass) = viewModel.parseResultSetCredentials(res.rawResponse, phone)
+                extractedUsername = user
+                extractedPassword = pass
+                currentStep = 4
+            } else {
+                val msg = res.message ?: ""
+                val raw = res.rawResponse ?: ""
+                val isCodeErr = msg.contains("kod", ignoreCase = true) ||
+                                msg.contains("token", ignoreCase = true) ||
+                                msg.contains("geçersiz", ignoreCase = true) ||
+                                msg.contains("hatalı", ignoreCase = true) ||
+                                msg.contains("yanlış", ignoreCase = true) ||
+                                raw.contains("invalid", ignoreCase = true) ||
+                                raw.contains("fail", ignoreCase = true)
+
+                if (isCodeErr || msg.isBlank()) {
+                    isErrorCode = true
+                    delay(1500)
+                    codeInput = ""
+                    isErrorCode = false
+                } else {
+                    validationError = "Onaylanmadı"
+                }
+            }
+        }
+    }
+
+    val isKtbConnected = uiState.wifiSsid?.contains("KTB", ignoreCase = true) == true || uiState.isWifiConnected
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+    ) {
+        // Step gösterge çubuğu (1 - 4)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            (1..4).forEach { step ->
+                val isActive = step <= currentStep
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(6.dp),
+                    shape = CircleShape,
+                    color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                ) {}
+            }
+        }
+
+        AnimatedContent(
+            targetState = currentStep,
+            transitionSpec = { fadeIn(tween(220)).togetherWith(fadeOut(tween(180))) },
+            label = "profile_step_anim",
+            modifier = Modifier.weight(1f)
+        ) { step ->
+            when (step) {
+                // ADIM 1: Wi-Fi Kontrolü (KTB-Misafir)
+                1 -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.size(64.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Wifi,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+                            }
+
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "Wi-Fi Ağ Kontrolü",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Profil kurulumu için cihazınızın kütüphanedeki 'KTB-Misafir' Wi-Fi ağına bağlı olması gerekmektedir.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp
+                                )
+                            }
+
+                            // Wi-Fi Durum Kartı
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isKtbConnected) IconColors.SuccessGreen.copy(alpha = 0.15f) else Color(0xFF332A15),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isKtbConnected) IconColors.SuccessGreen else Color(0xFFF59E0B)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isKtbConnected) Icons.Default.CheckCircle else Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = if (isKtbConnected) IconColors.SuccessGreen else Color(0xFFF59E0B),
+                                        modifier = Modifier.size(28.dp)
+                                    )
+
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = if (isKtbConnected) "KTB-Misafir Ağına Bağlı" else "KTB-Misafir Bağlı Değil",
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = if (isKtbConnected) "Aktif SSID: ${uiState.wifiSsid ?: "KTB-Misafir"}" else "Geçerli SSID: ${uiState.wifiSsid ?: "Yok"}",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (!isKtbConnected) {
+                                OutlinedButton(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        try {
+                                            context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
+                                        } catch (_: Exception) {}
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Wi-Fi Ayarlarını Aç")
+                                }
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                currentStep = 2
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .testTag("step1_continue_button"),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        ) {
+                            Text("Devam Et", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+
+                // ADIM 2: Numara Gözden Geçirme
+                2 -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "Numaranızı Kontrol Edin",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "SMS doğrulama kodu aşağıdaki 10 haneli cep telefonu numarasına gönderilecektir.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Tek büyük kutu (Sayfanın ortasına yakın, bold font)
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(vertical = 24.dp, horizontal = 16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    val formattedPhone = if (phoneDigits.length == 10) {
+                                        "0${phoneDigits.substring(0, 3)} ${phoneDigits.substring(3, 6)} ${phoneDigits.substring(6, 8)} ${phoneDigits.substring(8, 10)}"
+                                    } else {
+                                        phoneDigits
+                                    }
+                                    Text(
+                                        text = formattedPhone,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 26.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = UnboundedFontFamily,
+                                        textAlign = TextAlign.Center
+                                    )
+
+                                    TextButton(
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            showPhoneEditDialog = true
+                                        },
+                                        modifier = Modifier.testTag("edit_phone_number_button")
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Düzenle", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Alt Buton Satırı (Bölünmüş Geri + SMS Gönder)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    currentStep = 1
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                                modifier = Modifier.size(56.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Geri",
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    val normalized = com.example.util.PhoneUtils.normalizePhoneNumber("0$phoneDigits")
+                                    viewModel.updatePhoneNumber(normalized)
+                                    viewModel.startConnectionFlow()
+                                    context.findActivity()?.let { SmsCodeSource.startSmsUserConsent(it) }
+                                    currentStep = 3
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(56.dp)
+                                    .testTag("send_sms_token_button"),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            ) {
+                                Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("SMS Gönder", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                // ADIM 3: Kod Girişi ve SMS Yakalama (Android Klavye + Otomatik Onay + Hatalı Kod Animasyonu)
+                3 -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            // 4-5 satır aşağı kaydırma
+                            Spacer(modifier = Modifier.height(44.dp))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = "SMS Kodunuz",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "KUL.TUR.BKN tarafından gönderilen 6 haneli doğrulama kodunu giriniz.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 13.sp
+                                )
+                            }
+
+                            // Görünmeyen Sistem Klavyesi Giriş Alanı
+                            BasicTextField(
+                                value = codeInput,
+                                onValueChange = { input ->
+                                    if (input.length <= 6 && input.all { it.isDigit() } && !isErrorCode && !isValidating) {
+                                        codeInput = input
+                                    }
+                                },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier
+                                    .size(1.dp)
+                                    .alpha(0.01f)
+                                    .focusRequester(focusRequester)
+                            )
+
+                            // 6 haneli kod kutucukları (veya Hatalı Kod birleşik kutusu)
+                            AnimatedContent(
+                                targetState = isErrorCode,
+                                transitionSpec = { fadeIn(tween(200)).togetherWith(fadeOut(tween(180))) },
+                                label = "code_box_merge_anim"
+                            ) { errorState ->
+                                if (errorState) {
+                                    Surface(
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = IconColors.ErrorRed.copy(alpha = 0.15f),
+                                        border = androidx.compose.foundation.BorderStroke(1.5.dp, IconColors.ErrorRed),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = "Hatalı Kod",
+                                                color = IconColors.ErrorRed,
+                                                fontSize = 18.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = UnboundedFontFamily
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { focusRequester.requestFocus() },
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                                    ) {
+                                        (0..5).forEach { index ->
+                                            val digit = codeInput.getOrNull(index)?.toString() ?: ""
+                                            val isCurrent = index == codeInput.length.coerceAtMost(5)
+
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                border = androidx.compose.foundation.BorderStroke(
+                                                    if (isCurrent) 2.dp else 1.dp,
+                                                    if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                                ),
+                                                modifier = Modifier.weight(1f).height(54.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Text(
+                                                        text = digit,
+                                                        color = MaterialTheme.colorScheme.onSurface,
+                                                        fontSize = 22.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontFamily = UnboundedFontFamily,
+                                                        textAlign = TextAlign.Center
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (validationError != null) {
+                                Text(
+                                    text = validationError ?: "Onaylanmadı",
+                                    color = Color(0xFFF59E0B),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+
+                        // Alt Bar (Sol Geri Butonu + Sağ Durum/Yükleniyor)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    currentStep = 2
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                                modifier = Modifier.size(56.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Geri",
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+
+                            if (isValidating) {
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainer,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.5.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(
+                                            text = "Doğrulanıyor...",
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ADIM 4: Profil Kaydı ve Tamamlama
+                4 -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = IconColors.SuccessGreen.copy(alpha = 0.2f),
+                                modifier = Modifier.size(72.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = IconColors.SuccessGreen,
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                }
+                            }
+
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Profil Hazırlandı!",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = UnboundedFontFamily,
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = "KTB Wi-Fi otomatik bağlantı bilgileriniz sunucudan güvenle alındı.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 14.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+
+                            // Özet Kartı
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(18.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Kullanıcı Adı / Telefon:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                                        Text(extractedUsername, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Erişim Şifresi / Token:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                                        Text(extractedPassword, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Alt Buton Satırı (Bölünmüş Geri + Bitir)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    currentStep = 3
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                                modifier = Modifier.size(56.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Geri",
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.saveConnectionProfile(extractedUsername, extractedPassword)
+                                    onFinishSetup()
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(56.dp)
+                                    .testTag("finish_profile_setup_button"),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = IconColors.SuccessGreen,
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Bitir", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showPhoneEditDialog) {
+        var tempDigits by remember { mutableStateOf(phoneDigits) }
+        AlertDialog(
+            onDismissRequest = { showPhoneEditDialog = false },
+            title = { Text("Numara Düzenle") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("10 haneli cep telefonu numaranızı başında 0 olmadan giriniz (5xx xxx xx xx).", style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = tempDigits,
+                        onValueChange = { input ->
+                            val digits = input.filter { it.isDigit() }.take(10)
+                            tempDigits = digits
+                        },
+                        singleLine = true,
+                        label = { Text("10 Haneli Cep No") },
+                        modifier = Modifier.fillMaxWidth().testTag("edit_phone_input")
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (tempDigits.length == 10) {
+                            phoneDigits = tempDigits
+                            showPhoneEditDialog = false
+                        }
+                    },
+                    enabled = tempDigits.length == 10
+                ) {
+                    Text("Kaydet")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPhoneEditDialog = false }) {
+                    Text("Vazgeç")
+                }
+            }
+        )
+    }
+}
+
+// -------------------------------------------------------------
+// ÖZEL NUMERİK TUŞ TAKIMI (NUMERIC KEYPAD)
+// -------------------------------------------------------------
+@Composable
+private fun NumericKeypad(
+    onDigitClick: (String) -> Unit,
+    onDeleteClick: () -> Unit,
+    onClearClick: () -> Unit
+) {
+    val rows = listOf(
+        listOf("1", "2", "3"),
+        listOf("4", "5", "6"),
+        listOf("7", "8", "9"),
+        listOf("C", "0", "DEL")
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                row.forEach { key ->
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable {
+                                when (key) {
+                                    "DEL" -> onDeleteClick()
+                                    "C" -> onClearClick()
+                                    else -> onDigitClick(key)
+                                }
+                            }
+                            .testTag("keypad_key_$key")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            when (key) {
+                                "DEL" -> Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Backspace,
+                                    contentDescription = "Sil",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                "C" -> Text(
+                                    text = "C",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                else -> Text(
+                                    text = key,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

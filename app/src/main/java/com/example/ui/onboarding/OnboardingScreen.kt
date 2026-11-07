@@ -97,7 +97,6 @@ import kotlin.math.sin
 
 enum class OnboardingStepType {
     WELCOME,
-    SMS_PERMISSION,
     PHONE_PERMISSION,
     PHONE_NUMBER
 }
@@ -115,20 +114,11 @@ fun OnboardingScreen(
     val context = LocalContext.current
 
     val activeSteps = remember {
-        if (com.example.BuildConfig.SMS_PERMISSION_ENABLED) {
-            listOf(
-                OnboardingStepType.WELCOME,
-                OnboardingStepType.SMS_PERMISSION,
-                OnboardingStepType.PHONE_PERMISSION,
-                OnboardingStepType.PHONE_NUMBER
-            )
-        } else {
-            listOf(
-                OnboardingStepType.WELCOME,
-                OnboardingStepType.PHONE_PERMISSION,
-                OnboardingStepType.PHONE_NUMBER
-            )
-        }
+        listOf(
+            OnboardingStepType.WELCOME,
+            OnboardingStepType.PHONE_PERMISSION,
+            OnboardingStepType.PHONE_NUMBER
+        )
     }
 
     var currentStepIndex by remember { mutableIntStateOf(0) }
@@ -160,15 +150,6 @@ fun OnboardingScreen(
         animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
         label = "progress_animation"
     )
-
-    // SMS İzinleri Launcher'ı
-    val smsPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) {
-        if (currentStepIndex < activeSteps.lastIndex) {
-            currentStepIndex++
-        }
-    }
 
     // Telefon İzinleri Launcher'ı
     val phonePermissionLauncher = rememberLauncherForActivityResult(
@@ -244,26 +225,6 @@ fun OnboardingScreen(
                             if (currentStepIndex < activeSteps.lastIndex) {
                                 currentStepIndex++
                             }
-                        }
-                    )
-                }
-                OnboardingStepType.SMS_PERMISSION -> {
-                    StepSmsPermission(
-                        accentBlue = accentBlue,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary,
-                        buttonText = buttonText,
-                        darkButtonBg = darkButtonBg,
-                        onBack = {
-                            if (currentStepIndex > 0) currentStepIndex--
-                        },
-                        onGrantPermission = {
-                            smsPermissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.RECEIVE_SMS,
-                                    Manifest.permission.READ_SMS
-                                )
-                            )
                         }
                     )
                 }
@@ -416,139 +377,6 @@ private fun StepWelcome(
                         tint = buttonText,
                         modifier = Modifier.size(20.dp)
                     )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StepSmsPermission(
-    accentBlue: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    buttonText: Color,
-    darkButtonBg: Color,
-    onBack: () -> Unit,
-    onGrantPermission: () -> Unit
-) {
-    val haptic = LocalHapticFeedback.current
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentAlignment = Alignment.Center
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.phone_mockup2),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .testTag("onboarding_phone_mockup2")
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset(y = (-40).dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Mesajlara Erişim",
-                color = textPrimary,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("step2_title")
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "FKTB, Kültür Bakanlığında gelen mesajları yakalamak için SMS'lerinizi sadece kullanacağınız zaman tarayabilir.",
-                color = textSecondary,
-                fontSize = 15.sp,
-                lineHeight = 22.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .testTag("step2_description")
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Surface(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onBack()
-                    },
-                    shape = CircleShape,
-                    color = darkButtonBg,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .testTag("step2_back_button")
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Geri",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-
-                Button(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onGrantPermission()
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp)
-                        .testTag("step2_grant_permission_button"),
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = accentBlue,
-                        contentColor = buttonText
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "İzin Veriyorum",
-                            color = buttonText,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            tint = buttonText,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
                 }
             }
         }

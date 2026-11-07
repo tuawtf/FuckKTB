@@ -26,7 +26,10 @@ data class UserPreferences(
     val latestBetaVersion: String = "",
     val themeMode: String = "DARK",
     val colorPalette: String = "OCEAN",
-    val isAmoledMode: Boolean = false
+    val isAmoledMode: Boolean = false,
+    val isProfileCreated: Boolean = false,
+    val profileUsername: String = "",
+    val profilePassword: String = ""
 )
 
 class UserPreferencesRepository(private val context: Context) {
@@ -42,6 +45,9 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         val KEY_COLOR_PALETTE = stringPreferencesKey("color_palette")
         val KEY_AMOLED_MODE = booleanPreferencesKey("amoled_mode")
+        val KEY_IS_PROFILE_CREATED = booleanPreferencesKey("is_profile_created")
+        val KEY_PROFILE_USERNAME = stringPreferencesKey("profile_username")
+        val KEY_PROFILE_PASSWORD = stringPreferencesKey("profile_password")
 
         private val VALID_THEME_MODES = setOf("SYSTEM", "LIGHT", "DARK")
         private val VALID_PALETTES = setOf("DYNAMIC", "OCEAN", "SAKURA", "MACHA", "ESPRESSO", "LAVENDER")
@@ -64,6 +70,9 @@ class UserPreferencesRepository(private val context: Context) {
             val latestStableVersion = preferences[KEY_LATEST_STABLE_VERSION].orEmpty()
             val latestBetaVersion = preferences[KEY_LATEST_BETA_VERSION].orEmpty()
             val isAmoledMode = preferences[KEY_AMOLED_MODE] ?: false
+            val isProfileCreated = preferences[KEY_IS_PROFILE_CREATED] ?: false
+            val profileUsername = preferences[KEY_PROFILE_USERNAME].orEmpty()
+            val profilePassword = preferences[KEY_PROFILE_PASSWORD].orEmpty()
 
             var rawThemeMode = preferences[KEY_THEME_MODE] ?: "DARK"
             if (rawThemeMode !in VALID_THEME_MODES) {
@@ -90,7 +99,10 @@ class UserPreferencesRepository(private val context: Context) {
                 latestBetaVersion = latestBetaVersion,
                 themeMode = rawThemeMode,
                 colorPalette = rawPalette,
-                isAmoledMode = isAmoledMode
+                isAmoledMode = isAmoledMode,
+                isProfileCreated = isProfileCreated,
+                profileUsername = profileUsername,
+                profilePassword = profilePassword
             )
         }
 
@@ -156,6 +168,22 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setAmoledMode(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[KEY_AMOLED_MODE] = enabled
+        }
+    }
+
+    suspend fun saveConnectionProfile(username: String, token: String) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_IS_PROFILE_CREATED] = true
+            preferences[KEY_PROFILE_USERNAME] = username
+            preferences[KEY_PROFILE_PASSWORD] = token
+        }
+    }
+
+    suspend fun clearConnectionProfile() {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_IS_PROFILE_CREATED] = false
+            preferences[KEY_PROFILE_USERNAME] = ""
+            preferences[KEY_PROFILE_PASSWORD] = ""
         }
     }
 

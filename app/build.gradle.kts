@@ -10,7 +10,7 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk = 36
 
   defaultConfig {
     applicationId = "com.fktb.wtf"
@@ -20,20 +20,7 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-  }
-
-  flavorDimensions += "sms"
-
-  productFlavors {
-    create("sms") {
-      dimension = "sms"
-      buildConfigField("boolean", "SMS_PERMISSION_ENABLED", "true")
-    }
-    create("nosms") {
-      dimension = "sms"
-      applicationIdSuffix = ".nosms"
-      buildConfigField("boolean", "SMS_PERMISSION_ENABLED", "false")
-    }
+    buildConfigField("boolean", "SMS_PERMISSION_ENABLED", "false")
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
@@ -106,29 +93,11 @@ secrets {
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
 
-// AI Studio emulator preview expects outputs/apk/debug/app-debug.apk
-tasks.register<Copy>("copyDebugApkForEmulator") {
-  from(layout.buildDirectory.file("outputs/apk/sms/debug/app-sms-debug.apk"))
-  into(layout.buildDirectory.dir("outputs/apk/debug"))
-  rename { "app-debug.apk" }
-}
-
-tasks.matching { it.name in listOf("assembleDebug", "assembleSmsDebug", "packageSmsDebug") }.configureEach {
-  finalizedBy("copyDebugApkForEmulator")
-}
-
-// Some unused dependencies are commented out below instead of being removed.
-// This makes it easy to add them back in the future if needed.
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
   implementation("androidx.fragment:fragment-ktx:1.8.6")
-  // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
-  // implementation(libs.androidx.camera.camera2)
-  // implementation(libs.androidx.camera.core)
-  // implementation(libs.androidx.camera.lifecycle)
-  // implementation(libs.androidx.camera.view)
   implementation(libs.androidx.compose.material.icons.core)
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.material3)
@@ -143,18 +112,8 @@ dependencies {
   implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
-  // implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
-  // Uncomment to use Firestore:
-  // implementation(libs.firebase.firestore)
-
-  // Uncomment ALL FOUR of the following dependencies together to use Firebase Auth and Google
-  // Sign-In via Credential Manager:
-  // implementation(libs.firebase.auth)
-  // implementation(libs.androidx.credentials)
-  // implementation(libs.androidx.credentials.play.services)
-  // implementation(libs.googleid)
   implementation(libs.firebase.appcheck.recaptcha)
   implementation(libs.firebase.appcheck.debug)
   implementation(libs.kotlinx.coroutines.android)
@@ -162,8 +121,7 @@ dependencies {
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
-  add("nosmsImplementation", "com.google.android.gms:play-services-auth-api-phone:18.1.0")
-  // implementation(libs.play.services.location)
+  implementation("com.google.android.gms:play-services-auth-api-phone:18.1.0")
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)

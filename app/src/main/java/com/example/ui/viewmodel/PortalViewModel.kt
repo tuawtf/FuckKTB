@@ -162,6 +162,51 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun saveConnectionProfile(username: String, token: String) {
+        viewModelScope.launch {
+            userPrefsRepo.saveConnectionProfile(username, token)
+            addLog(LogLevel.SUCCESS, "Bağlantı profili kaydoldu: $username")
+        }
+    }
+
+    fun clearConnectionProfile() {
+        viewModelScope.launch {
+            userPrefsRepo.clearConnectionProfile()
+            addLog(LogLevel.WARNING, "Bağlantı profili silindi.")
+        }
+    }
+
+    suspend fun validateSmsTokenForProfile(phoneNumber: String, code: String): CaptivePortalClient.PortalResult {
+        val result = client.validateSmsToken(phoneNumber, code)
+        if (result.isSuccess) {
+            addLog(LogLevel.SUCCESS, "Profil doğrulama yanıtı alındı (HTTP ${result.httpStatusCode})")
+        } else {
+            addLog(LogLevel.ERROR, "Profil doğrulama hatası: ${result.message}")
+        }
+        return result
+    }
+
+    fun parseResultSetCredentials(rawBody: String?, fallbackPhone: String): Pair<String, String> {
+        val defaultUser = if (fallbackPhone.startsWith("0")) fallbackPhone else "0$fallbackPhone"
+        if (rawBody.isNullOrBlank()) {
+            return Pair(defaultUser, "f9642d0cd3")
+        }
+        return try {
+            val json = org.json.JSONObject(rawBody)
+            val resultSet = json.optJSONObject("resultSet")
+            val username = resultSet?.optString("username")?.takeIf { it.isNotBlank() }
+                ?: json.optString("username")?.takeIf { it.isNotBlank() }
+                ?: defaultUser
+            val password = resultSet?.optString("password")?.takeIf { it.isNotBlank() }
+                ?: json.optString("password")?.takeIf { it.isNotBlank() }
+                ?: resultSet?.optString("token")?.takeIf { it.isNotBlank() }
+                ?: "f9642d0cd3"
+            Pair(username, password)
+        } catch (_: Exception) {
+            Pair(defaultUser, "f9642d0cd3")
+        }
+    }
+
     fun checkForUpdates(channel: String) {
         viewModelScope.launch {
             addLog(LogLevel.INFO, "GitHub Releases denetleniyor ($channel)...")

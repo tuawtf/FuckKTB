@@ -259,14 +259,7 @@ class UpdateManager(
     }
 
     private fun pickBestApkAsset(assets: List<GitHubAsset>): GitHubAsset? {
-        val smsEnabled = BuildConfig.SMS_PERMISSION_ENABLED
-        return if (smsEnabled) {
-            assets.firstOrNull { it.name.endsWith(".apk") && !it.name.contains("nosms", ignoreCase = true) }
-                ?: assets.firstOrNull { it.name.endsWith(".apk") }
-        } else {
-            assets.firstOrNull { it.name.contains("nosms", ignoreCase = true) && it.name.endsWith(".apk") }
-                ?: assets.firstOrNull { it.name.endsWith(".apk") }
-        }
+        return assets.firstOrNull { it.name.endsWith(".apk") }
     }
 
     suspend fun downloadAndInstallApk(apkAsset: GitHubAsset, versionName: String) = withContext(Dispatchers.IO) {

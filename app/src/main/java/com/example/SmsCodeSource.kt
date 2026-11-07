@@ -17,9 +17,8 @@ import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.common.api.Status
 
 /**
- * SMS izinsiz (nosms flavor) surum icin SmsCodeSource nesnesi.
  * Google Play Services SMS User Consent API kullanarak kullanicidan onay alir
- * ve dogrulama kodunu SmsCodeBus veri yoluna aktarir.
+ * ve dogrulama kodunu SmsCodeBus veri yoluna aktarir (TEK SÜRÜM / SIFIR SMS İZNİ).
  *
  * Guvenlik geregi SMS icerigi ve dogrulama kodu loglanmaz.
  * SIFIR EMOJI KURALI: Kod, log ve mesajlarda emoji kullanilmaz.
