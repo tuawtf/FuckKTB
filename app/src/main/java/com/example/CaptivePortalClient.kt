@@ -246,6 +246,48 @@ class CaptivePortalClient(
         }
 
     /**
+     * KTB aginin ulasilabilir ve captive portalin aktif olup olmadigini
+     * http://captive.kultur.gov.tr/ adresine hafif bir istek atarak dogrular.
+     */
+    suspend fun probeKtbNetwork(): Boolean = withContext(Dispatchers.IO) {
+        bindProcessToWifiNetwork()
+
+        val probeClient = client.newBuilder()
+            .connectTimeout(2500, TimeUnit.MILLISECONDS)
+            .readTimeout(2500, TimeUnit.MILLISECONDS)
+            .writeTimeout(2500, TimeUnit.MILLISECONDS)
+            .followRedirects(false)
+            .build()
+
+        val request = Request.Builder()
+            .url("$BASE_URL/")
+            .addHeader("User-Agent", HEADER_USER_AGENT)
+            .head()
+            .build()
+
+        try {
+            probeClient.newCall(request).execute().use { response ->
+                response.code in 200..399
+            }
+        } catch (_: IOException) {
+            try {
+                val getRequest = Request.Builder()
+                    .url("$BASE_URL/")
+                    .addHeader("User-Agent", HEADER_USER_AGENT)
+                    .get()
+                    .build()
+                probeClient.newCall(getRequest).execute().use { response ->
+                    response.code in 200..399
+                }
+            } catch (_: Exception) {
+                false
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
      * Captive portalin kalkip kuresel internetin acildigini test eder.
      */
     suspend fun checkInternetConnectivity(): Boolean = withContext(Dispatchers.IO) {

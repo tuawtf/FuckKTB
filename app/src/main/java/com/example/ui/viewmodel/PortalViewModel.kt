@@ -62,6 +62,7 @@ data class PortalUiState(
     val countdownSeconds: Int = 120,
     val isWifiConnected: Boolean = false,
     val wifiSsid: String? = null,
+    val isKtbNetworkConfirmed: Boolean = false,
     val logs: List<LogItem> = emptyList()
 )
 
@@ -288,32 +289,43 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     fun checkWifiState() {
         try {
             val cm = getApplication<Application>().getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            val wm = getApplication<Application>().applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-
             val network = cm?.activeNetwork
             val caps = cm?.getNetworkCapabilities(network)
             val isWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
 
-            var ssid: String? = null
-            if (isWifi) {
-                val wifiInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                    caps?.transportInfo as? android.net.wifi.WifiInfo ?: @Suppress("DEPRECATION") wm?.connectionInfo
-                } else {
-                    @Suppress("DEPRECATION") wm?.connectionInfo
+            if (!isWifi) {
+                _uiState.update {
+                    it.copy(isWifiConnected = false, wifiSsid = null, isKtbNetworkConfirmed = false)
                 }
-
-                val rawSsid = wifiInfo?.ssid?.replace("\"", "")?.trim()
-                if (!rawSsid.isNullOrBlank() && rawSsid != "<unknown ssid>") {
-                    ssid = rawSsid
-                } else {
-                    ssid = "KTB-Misafir"
-                }
+                return
             }
 
+            viewModelScope.launch {
+                val isKtbConfirmed = client.probeKtbNetwork()
+                if (isKtbConfirmed) {
+                    _uiState.update {
+                        it.copy(
+                            isWifiConnected = true,
+                            wifiSsid = "KTB-Misafir",
+                            isKtbNetworkConfirmed = true
+                        )
+                    }
+                    addLog(LogLevel.INFO, "KTB Ağ Doğrulaması: captive.kultur.gov.tr erişimi doğrulandı (KTB-Misafir).")
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isWifiConnected = false,
+                            wifiSsid = null,
+                            isKtbNetworkConfirmed = false
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {
             _uiState.update {
-                it.copy(isWifiConnected = isWifi, wifiSsid = ssid)
+                it.copy(isWifiConnected = false, wifiSsid = null, isKtbNetworkConfirmed = false)
             }
-        } catch (_: Exception) {}
+        }
     }
 
     private fun observeSmsEvents() {
@@ -334,7 +346,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     fun startConnectionFlow(onBeforeRequest: (() -> Unit)? = null) {
         val prefs = userPreferences.value
         if (!prefs.isProfileCreated || prefs.profileUsername.isBlank() || prefs.profilePassword.isBlank()) {
-            val error = "Bağlantı profiliniz bulunamadı. Lütfen önce Bağlantılar sekmesinden profilinizi oluşturun."
+            val error = "Profilinizi oluşturmadınız."
             _uiState.update {
                 it.copy(
                     step = PortalStep.ERROR,
@@ -346,7 +358,7 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
-        if (!_uiState.value.isWifiConnected) {
+        if (!_uiState.value.isKtbNetworkConfirmed && !_uiState.value.isWifiConnected) {
             val error = "Lütfen KTB-Misafir ağına bağlanın."
             _uiState.update {
                 it.copy(

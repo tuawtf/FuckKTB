@@ -214,7 +214,13 @@ fun MainScreen(
                 label = "main_tab_content"
             ) { tab ->
                 when (tab) {
-                    MainTab.HOME -> ConnectTabContent(viewModel = viewModel, onNavigateToTab = { selectedTab = it })
+                    MainTab.HOME -> ConnectTabContent(
+                        viewModel = viewModel,
+                        onNavigateToProfileSetup = {
+                            selectedTab = MainTab.CONNECTIONS
+                            activeSubPage = "Profilim"
+                        }
+                    )
                     MainTab.CONNECTIONS -> ConnectionsTabContent(
                         activeSubPage = activeSubPage,
                         viewModel = viewModel,
@@ -252,7 +258,7 @@ fun MainScreen(
 @Composable
 private fun ConnectTabContent(
     viewModel: PortalViewModel,
-    onNavigateToTab: (MainTab) -> Unit
+    onNavigateToProfileSetup: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val userPrefs by viewModel.userPreferences.collectAsState()
@@ -287,13 +293,13 @@ private fun ConnectTabContent(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
-                    imageVector = if (uiState.isWifiConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
+                    imageVector = if (uiState.isKtbNetworkConfirmed) Icons.Default.Wifi else Icons.Default.WifiOff,
                     contentDescription = null,
-                    tint = if (uiState.isWifiConnected) IconColors.SuccessGreen else IconColors.WarningYellow,
+                    tint = if (uiState.isKtbNetworkConfirmed) IconColors.SuccessGreen else IconColors.WarningYellow,
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
-                    text = uiState.wifiSsid ?: if (uiState.isWifiConnected) "Wi-Fi Aktif" else "Wi-Fi Bağlı Değil",
+                    text = if (uiState.isKtbNetworkConfirmed) "KTB-Misafir" else "Wi-Fi Bağlı Değil",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -476,16 +482,16 @@ private fun ConnectTabContent(
     if (showNoProfileDialog) {
         AlertDialog(
             onDismissRequest = { showNoProfileDialog = false },
-            title = { Text("Profil Bulunamadı") },
-            text = { Text("Bağlantı profiliniz bulunamadı. Lütfen önce Bağlantılar sekmesinden profilinizi oluşturun.") },
+            title = { Text("Uyarı") },
+            text = { Text("Profilinizi oluşturmadınız.") },
             confirmButton = {
                 Button(
                     onClick = {
                         showNoProfileDialog = false
-                        onNavigateToTab(MainTab.CONNECTIONS)
+                        onNavigateToProfileSetup()
                     }
                 ) {
-                    Text("Bağlantılara Git")
+                    Text("Profilimi oluştur")
                 }
             },
             dismissButton = {
@@ -2479,28 +2485,51 @@ private fun ConnectionsTabContent(
                         } else {
                             // Profiliniz oluşturulmadı Uyarısı
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 color = Color(0xFF332A15),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ErrorOutline,
-                                        contentDescription = null,
-                                        tint = Color(0xFFF59E0B),
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                    Text(
-                                        text = "Profiliniz oluşturulmadı. Kurulum yapmak için dokunun.",
-                                        color = Color.White,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ErrorOutline,
+                                            contentDescription = null,
+                                            tint = Color(0xFFF59E0B),
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                        Text(
+                                            text = "Profilinizi oluşturmadınız.",
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            onSelectSubPage("Profilim")
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFFF59E0B),
+                                            contentColor = Color.Black
+                                        )
+                                    ) {
+                                        Text(
+                                            text = "Profilimi oluştur",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -2797,7 +2826,7 @@ private fun ProfileSubPageContent(
         }
     }
 
-    val isKtbConnected = uiState.wifiSsid?.contains("KTB", ignoreCase = true) == true || uiState.isWifiConnected
+    val isKtbConnected = uiState.isKtbNetworkConfirmed || uiState.wifiSsid?.contains("KTB", ignoreCase = true) == true || uiState.isWifiConnected
 
     Column(
         modifier = Modifier
