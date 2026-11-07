@@ -287,10 +287,10 @@ class UpdateManager(
             val responseBody = response.body ?: throw IOException("Boş yanıt gövdesi")
             val totalBytes = if (responseBody.contentLength() > 0) responseBody.contentLength() else apkAsset.size
 
+            clearApkCache()
             val cacheDir = File(context.cacheDir, "updates")
             if (!cacheDir.exists()) cacheDir.mkdirs()
             val apkFile = File(cacheDir, "FKTB-v$versionName.apk")
-            if (apkFile.exists()) apkFile.delete()
 
             responseBody.byteStream().use { input ->
                 apkFile.outputStream().use { output ->
@@ -361,6 +361,9 @@ class UpdateManager(
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
 
+            // Android VM kapandığında veya uygulama güncellenip açıldığında dosyanın silinmesini sağla
+            apkFile.deleteOnExit()
+
             context.startActivity(installIntent)
         } catch (e: Exception) {
             Log.e("UpdateManager", "Yükleyici başlatılamadı", e)
@@ -368,8 +371,30 @@ class UpdateManager(
         }
     }
 
+    /**
+     * Güncelleme sonrasında veya açılışta önbellekteki APK dosyalarını siler.
+     * Cihaz hafızasında APK artığı tutulmasını engeller.
+     */
+    fun clearApkCache() {
+        try {
+            val cacheDir = File(context.cacheDir, "updates")
+            if (cacheDir.exists()) {
+                val files = cacheDir.listFiles()
+                files?.forEach { file ->
+                    if (file.name.endsWith(".apk", ignoreCase = true)) {
+                        val deleted = file.delete()
+                        Log.d("UpdateManager", "Önbellekteki APK silindi: ${file.name}, basarili: $deleted")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("UpdateManager", "Önbellekteki APK temizleme hatası: ${e.message}")
+        }
+    }
+
     fun resetDownloadState() {
         _downloadState.value = DownloadState.Idle
+        clearApkCache()
     }
 
     fun resetCheckState() {

@@ -29,7 +29,8 @@ data class UserPreferences(
     val isAmoledMode: Boolean = false,
     val isProfileCreated: Boolean = false,
     val profileUsername: String = "",
-    val profilePassword: String = ""
+    val profilePassword: String = "",
+    val expressiveBlur: Boolean = true
 )
 
 class UserPreferencesRepository(private val context: Context) {
@@ -48,6 +49,7 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_IS_PROFILE_CREATED = booleanPreferencesKey("is_profile_created")
         val KEY_PROFILE_USERNAME = stringPreferencesKey("profile_username")
         val KEY_PROFILE_PASSWORD = stringPreferencesKey("profile_password")
+        val KEY_EXPRESSIVE_BLUR = booleanPreferencesKey("expressive_blur")
 
         private val VALID_THEME_MODES = setOf("SYSTEM", "LIGHT", "DARK")
         private val VALID_PALETTES = setOf("DYNAMIC", "OCEAN", "SAKURA", "MACHA", "ESPRESSO", "LAVENDER")
@@ -73,6 +75,7 @@ class UserPreferencesRepository(private val context: Context) {
             val isProfileCreated = preferences[KEY_IS_PROFILE_CREATED] ?: false
             val profileUsername = preferences[KEY_PROFILE_USERNAME].orEmpty()
             val profilePassword = preferences[KEY_PROFILE_PASSWORD].orEmpty()
+            val expressiveBlur = preferences[KEY_EXPRESSIVE_BLUR] ?: true
 
             var rawThemeMode = preferences[KEY_THEME_MODE] ?: "DARK"
             if (rawThemeMode !in VALID_THEME_MODES) {
@@ -102,7 +105,8 @@ class UserPreferencesRepository(private val context: Context) {
                 isAmoledMode = isAmoledMode,
                 isProfileCreated = isProfileCreated,
                 profileUsername = profileUsername,
-                profilePassword = profilePassword
+                profilePassword = profilePassword,
+                expressiveBlur = expressiveBlur
             )
         }
 
@@ -168,6 +172,12 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setAmoledMode(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[KEY_AMOLED_MODE] = enabled
+        }
+    }
+
+    suspend fun setExpressiveBlur(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_EXPRESSIVE_BLUR] = enabled
         }
     }
 

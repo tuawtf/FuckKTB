@@ -11,6 +11,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -148,9 +149,46 @@ import com.example.ui.theme.getAppPalettes
 import com.example.ui.viewmodel.LogLevel
 import com.example.ui.viewmodel.PortalStep
 import com.example.ui.viewmodel.PortalViewModel
-import com.example.util.PhoneUtils
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.Contrast
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
+import androidx.compose.material3.LocalRippleConfiguration
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
+import com.example.ui.components.frostedContainer
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
-@OptIn(ExperimentalMaterial3Api::class)
+val LocalBottomBarPadding = compositionLocalOf { 0.dp }
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MainScreen(
     viewModel: PortalViewModel,
@@ -166,6 +204,12 @@ fun MainScreen(
     val updateCheckState by viewModel.updateCheckState.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
 
+    val hazeState = remember { HazeState() }
+    val effectiveHazeState = if (userPrefs.expressiveBlur) hazeState else null
+
+    val navBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val bottomBarPadding = 56.dp + 16.dp + navBarsBottom + 16.dp
+
     LaunchedEffect(updateCheckState, userPrefs.checkUpdatesOnLaunch) {
         if (userPrefs.checkUpdatesOnLaunch && !hasAutoOpenedSheetOnLaunch) {
             if (updateCheckState is UpdateCheckResult.UpdateAvailable) {
@@ -180,34 +224,62 @@ fun MainScreen(
     }
 
     BackHandler(enabled = !showUpdateBottomSheet && activeSubPage != null) {
-        activeSubPage = null
+        if (activeSubPage == "Profilim_Sihirbaz") {
+            activeSubPage = "Profilim"
+        } else {
+            activeSubPage = null
+        }
     }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopBarSection(
-                title = activeSubPage ?: selectedTab.title,
-                showBackButton = activeSubPage != null,
-                onBackClick = { activeSubPage = null }
-            )
-        },
-        bottomBar = {
-            CustomBottomBar(
-                selectedTab = selectedTab,
-                onTabSelected = {
-                    selectedTab = it
-                    activeSubPage = null
+    CompositionLocalProvider(LocalBottomBarPadding provides bottomBarPadding) {
+        Scaffold(
+            contentWindowInsets = WindowInsets(0.dp),
+            containerColor = Color.Transparent,
+            topBar = {
+                TopBarSection(
+                    title = if (activeSubPage == "Profilim_Sihirbaz") "Profil Sihirbazı" else (activeSubPage ?: selectedTab.title),
+                    showBackButton = activeSubPage != null,
+                    onBackClick = {
+                        if (activeSubPage == "Profilim_Sihirbaz") {
+                            activeSubPage = "Profilim"
+                        } else {
+                            activeSubPage = null
+                        }
+                    }
+                )
+            },
+            bottomBar = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
+                        .padding(bottom = 16.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    AnimatedVisibility(
+                        visible = activeSubPage == null,
+                        enter = slideInVertically { it } + fadeIn(),
+                        exit = slideOutVertically { it } + fadeOut()
+                    ) {
+                        CustomBottomBar(
+                            selectedTab = selectedTab,
+                            onTabSelected = {
+                                selectedTab = it
+                                activeSubPage = null
+                            },
+                            hazeState = effectiveHazeState
+                        )
+                    }
                 }
-            )
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = innerPadding.calculateTopPadding())
+                    .then(if (userPrefs.expressiveBlur) Modifier.hazeSource(state = hazeState) else Modifier)
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
             AnimatedContent(
                 targetState = selectedTab,
                 transitionSpec = { fadeIn(tween(250)).togetherWith(fadeOut(tween(200))) },
@@ -239,6 +311,7 @@ fun MainScreen(
                 }
             }
         }
+    }
     }
 
     if (showUpdateBottomSheet) {
@@ -277,7 +350,8 @@ private fun ConnectTabContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(20.dp),
+            .padding(horizontal = 20.dp)
+            .padding(top = 20.dp, bottom = LocalBottomBarPadding.current),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
@@ -574,7 +648,9 @@ private fun LogsTabContent(viewModel: PortalViewModel) {
 
         if (uiState.logs.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = LocalBottomBarPadding.current),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -600,6 +676,7 @@ private fun LogsTabContent(viewModel: PortalViewModel) {
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
+                contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(uiState.logs, key = { it.id }) { log ->
@@ -708,9 +785,8 @@ private fun SettingsTabContent(
             SettingsSubPagePlaceholder(title = subPage)
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = LocalBottomBarPadding.current),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 item {
@@ -1178,9 +1254,8 @@ private fun UpdatesSubPageContent(
     }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = LocalBottomBarPadding.current),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
@@ -1520,8 +1595,9 @@ private fun UpdatesSubPageContent(
 }
 
 // -------------------------------------------------------------
-// GÖRÜNÜM ALT SAYFASI (REFERANS GÖRSELE UYGUN "UYGULAMA TEMASI" KARTI)
+// GÖRÜNÜM ALT SAYFASI (CaffeineHealth REFERANS GÖRÜNÜM TASARIMI)
 // -------------------------------------------------------------
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun AppearanceSubPageContent(
     viewModel: PortalViewModel
@@ -1530,17 +1606,17 @@ private fun AppearanceSubPageContent(
     val currentThemeMode = userPrefs.themeMode
     val currentPalette = userPrefs.colorPalette
     val isAmoledMode = userPrefs.isAmoledMode
+    val isExpressiveBlur = userPrefs.expressiveBlur
     val haptic = LocalHapticFeedback.current
 
     val appPalettes = getAppPalettes()
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = LocalBottomBarPadding.current),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Blok: Uygulama Teması Kartı (Referans Görsel Tasarımı)
+        // 1. Blok: Uygulama Teması Kartı (Caffeine ToggleButton 3'lü Grup)
         item {
             Card(
                 modifier = Modifier
@@ -1578,11 +1654,11 @@ private fun AppearanceSubPageContent(
                         )
                     }
 
-                    // Alt Kısım: Referans görseldeki gibi yan yana 3 bağımsız kapsül buton: [Sistem] [Koyu] [Açık]
+                    // Alt Kısım: ToggleButton 3'lü grup [Sistem] [Açık] [Koyu]
                     val themeOptions = listOf(
-                        "SYSTEM" to "Sistem",
-                        "DARK" to "Koyu",
-                        "LIGHT" to "Açık"
+                        Triple("SYSTEM", "Sistem", Icons.Default.BrightnessAuto),
+                        Triple("LIGHT", "Açık", Icons.Default.LightMode),
+                        Triple("DARK", "Koyu", Icons.Default.DarkMode)
                     )
 
                     Row(
@@ -1590,45 +1666,46 @@ private fun AppearanceSubPageContent(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        themeOptions.forEach { (modeKey, modeTitle) ->
+                        themeOptions.forEach { (modeKey, modeTitle, modeIcon) ->
                             val isSelected = currentThemeMode == modeKey
 
-                            val pillBgColor = if (isSelected) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            }
-                            val pillTextColor = if (isSelected) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-
-                            Surface(
+                            ToggleButton(
+                                checked = isSelected,
+                                onCheckedChange = {
+                                    if (!isSelected) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        viewModel.setThemeMode(modeKey)
+                                    }
+                                },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(48.dp)
-                                    .clip(CircleShape)
-                                    .clickable {
-                                        if (!isSelected) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            viewModel.setThemeMode(modeKey)
-                                        }
-                                    }
+                                    .height(52.dp)
                                     .testTag("theme_option_${modeKey.lowercase()}"),
-                                shape = CircleShape,
-                                color = pillBgColor
+                                shapes = ToggleButtonDefaults.shapes(
+                                    shape = CircleShape,
+                                    pressedShape = CircleShape,
+                                    checkedShape = CircleShape
+                                ),
+                                colors = ToggleButtonDefaults.toggleButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
                             ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier.fillMaxSize()
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
+                                    Icon(
+                                        imageVector = modeIcon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                     Text(
                                         text = modeTitle,
-                                        color = pillTextColor,
-                                        fontSize = 14.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        textAlign = TextAlign.Center
+                                        fontSize = 13.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                     )
                                 }
                             }
@@ -1727,7 +1804,7 @@ private fun AppearanceSubPageContent(
                                                 size = canvasSize
                                             )
 
-                                            drawArc(
+                                             drawArc(
                                                 color = palette.tertiaryColor,
                                                 startAngle = 270f,
                                                 sweepAngle = 90f,
@@ -1783,12 +1860,12 @@ private fun AppearanceSubPageContent(
             }
         }
 
-        // 3. Blok: Amoled görünüm Switch Kartı
+        // 3. Blok: Görünüm Seçenekleri Kartı (Segmented Card: Amoled + Gelişmiş Bulanıklık)
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("amoled_mode_card"),
+                    .testTag("appearance_options_card"),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 border = androidx.compose.foundation.BorderStroke(
@@ -1796,41 +1873,133 @@ private fun AppearanceSubPageContent(
                     MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
                 )
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Column(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    // Satır 1: Amoled Görünüm
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val next = !isAmoledMode
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.setAmoledMode(next)
+                            }
+                            .padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(
-                            text = "Amoled görünüm",
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Karanlık temada katran siyahı (#000000) arka plan kullanır.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Contrast,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = "Amoled görünüm",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Karanlık temada katran siyahı (#000000) arka plan kullanır.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Switch(
+                            checked = isAmoledMode,
+                            onCheckedChange = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.setAmoledMode(it)
+                            },
+                            modifier = Modifier.testTag("amoled_mode_switch")
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Switch(
-                        checked = isAmoledMode,
-                        onCheckedChange = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            viewModel.setAmoledMode(it)
-                        },
-                        modifier = Modifier.testTag("amoled_mode_switch")
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                        thickness = 1.dp
                     )
+
+                    // Satır 2: Gelişmiş Bulanıklık (Expressive Blur)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val next = !isExpressiveBlur
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.setExpressiveBlur(next)
+                            }
+                            .padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.BlurOn,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = "Gelişmiş bulanıklık",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Alt gezinme çubuğunda cam (frosted glass) bulanıklık efekti uygular.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Switch(
+                            checked = isExpressiveBlur,
+                            onCheckedChange = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.setExpressiveBlur(it)
+                            },
+                            modifier = Modifier.testTag("expressive_blur_switch")
+                        )
+                    }
                 }
             }
         }
@@ -2381,28 +2550,20 @@ private fun ConnectionsTabContent(
     val haptic = LocalHapticFeedback.current
 
     if (activeSubPage == "Profilim") {
-        if (isProfileCreated) {
-            ProfileDetailScreen(
-                viewModel = viewModel,
-                onBackClick = { onSelectSubPage(null) },
-                onReconfigure = { onSelectSubPage("Profilim_Sihirbaz") }
-            )
-        } else {
-            ProfileSubPageContent(
-                viewModel = viewModel,
-                onFinishSetup = { onSelectSubPage(null) }
-            )
-        }
+        ProfileDetailScreen(
+            viewModel = viewModel,
+            onBackClick = { onSelectSubPage(null) },
+            onReconfigure = { onSelectSubPage("Profilim_Sihirbaz") }
+        )
     } else if (activeSubPage == "Profilim_Sihirbaz") {
         ProfileSubPageContent(
             viewModel = viewModel,
-            onFinishSetup = { onSelectSubPage(null) }
+            onFinishSetup = { onSelectSubPage("Profilim") }
         )
     } else {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = LocalBottomBarPadding.current),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // "Bağlantı Profilim" Kartı
@@ -2483,54 +2644,54 @@ private fun ConnectionsTabContent(
                                 }
                             }
                         } else {
-                            // Profiliniz oluşturulmadı Uyarısı
+                            // Profiliniz oluşturulmadı Uyarısı (Tuşa dahil DEĞİL, bağımsız uyarı kutusu)
                             Surface(
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = Color(0xFF332A15),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ErrorOutline,
-                                            contentDescription = null,
-                                            tint = Color(0xFFF59E0B),
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                        Text(
-                                            text = "Profilinizi oluşturmadınız.",
-                                            color = Color.White,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-
-                                    Button(
-                                        onClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            onSelectSubPage("Profilim")
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFFF59E0B),
-                                            contentColor = Color.Black
-                                        )
-                                    ) {
-                                        Text(
-                                            text = "Profilimi oluştur",
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.ErrorOutline,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF59E0B),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "Profilinizi oluşturmadınız.",
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                 }
+                            }
+
+                            // UYARIDAN AYRI VE NORMAL MATERIAL 3 PALET RENGİNDE TUŞ
+                            Button(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onSelectSubPage("Profilim_Sihirbaz")
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .testTag("create_profile_card_button"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            ) {
+                                Text(
+                                    text = "Profilimi oluştur",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }
@@ -2598,8 +2759,8 @@ private fun ProfileDetailScreen(
                                 .padding(horizontal = 18.dp)
                         ) {
                             Text(
-                                text = userPrefs.profileUsername.ifBlank { userPrefs.phoneNumber },
-                                color = Color.White,
+                                text = userPrefs.profileUsername.ifBlank { userPrefs.phoneNumber.ifBlank { "Henüz Belirlenmedi" } },
+                                color = if (userPrefs.isProfileCreated || userPrefs.phoneNumber.isNotBlank()) Color.White else Color(0xFF8E95A5),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = UnboundedFontFamily
@@ -2635,8 +2796,8 @@ private fun ProfileDetailScreen(
                                 .padding(horizontal = 18.dp)
                         ) {
                             Text(
-                                text = userPrefs.profilePassword.ifBlank { "f9642d0cd3" },
-                                color = Color(0xFF9EC5EA),
+                                text = if (userPrefs.isProfileCreated) userPrefs.profilePassword.ifBlank { "f9642d0cd3" } else "Henüz Belirlenmedi",
+                                color = if (userPrefs.isProfileCreated) Color(0xFF9EC5EA) else Color(0xFF8E95A5),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace
@@ -2648,43 +2809,64 @@ private fun ProfileDetailScreen(
         }
 
         // Ekranın En Altı (İşlem Butonları)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            OutlinedButton(
+        if (userPrefs.isProfileCreated) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onReconfigure()
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp)
+                        .testTag("reconfigure_profile_button"),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Text("Yeniden Yapılandır", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Button(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        showDeleteDialog = true
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp)
+                        .testTag("delete_profile_button"),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF7F1D1D),
+                        contentColor = Color(0xFFF87171)
+                    )
+                ) {
+                    Text("Profili Sil", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        } else {
+            Button(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onReconfigure()
                 },
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .height(52.dp)
-                    .testTag("reconfigure_profile_button"),
-                shape = RoundedCornerShape(14.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Text("Yeniden Yapılandır", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            }
-
-            Button(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    showDeleteDialog = true
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .testTag("delete_profile_button"),
+                    .padding(bottom = 12.dp)
+                    .testTag("create_profile_button"),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF7F1D1D),
-                    contentColor = Color(0xFFF87171)
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
-                Text("Profili Sil", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("Profilimi Oluştur", fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -3660,89 +3842,146 @@ private fun TopBarSection(
 }
 
 // -------------------------------------------------------------
-// MATERIAL 3 BOTTOM BAR (4 SEKME)
+// CAFFEINE HEALTH STYLE FLOATING BOTTOM BAR (4 SEKME)
 // -------------------------------------------------------------
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CustomBottomBar(
     selectedTab: MainTab,
     onTabSelected: (MainTab) -> Unit,
+    hazeState: HazeState?,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val tabs = MainTab.entries.toTypedArray()
 
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 0.dp,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+    val tabBounds = remember { mutableStateMapOf<MainTab, Rect>() }
+
+    val selectedBounds = tabBounds[selectedTab]
+    val targetX = selectedBounds?.left ?: 0f
+    val targetWidth = selectedBounds?.width ?: 0f
+
+    val animatedIndicatorX by animateFloatAsState(
+        targetValue = targetX,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessLow
         ),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 7.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            MainTab.entries.forEach { tab ->
-                val isSelected = tab == selectedTab
-                val iconOffsetY by animateDpAsState(
-                    targetValue = if (isSelected) (-2).dp else 0.dp,
-                    animationSpec = tween(durationMillis = 200),
-                    label = "tab_icon_offset"
-                )
+        label = "nav_indicator_x"
+    )
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable {
+    val animatedIndicatorWidth by animateFloatAsState(
+        targetValue = targetWidth,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "nav_indicator_width"
+    )
+
+    BoxWithConstraints(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        val isWideScreen = maxWidth >= 600.dp
+        // Etiket sığmıyorsa gizle: etiketGenişliği + 248.dp <= maxWidth
+        val canShowSelectedLabel = isWideScreen || (maxWidth >= 330.dp)
+
+        CompositionLocalProvider(LocalRippleConfiguration provides null) {
+            HorizontalFloatingToolbar(
+                expanded = true,
+                colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(
+                    toolbarContainerColor = Color.Transparent,
+                    toolbarContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                modifier = Modifier
+                    .frostedContainer(
+                        hazeState = hazeState,
+                        shape = CircleShape,
+                        backgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                        tintAlpha = 0.72f,
+                        blurRadius = 24.dp,
+                        noiseFactor = 0.08f
+                    )
+            ) {
+                tabs.forEachIndexed { index, tab ->
+                    val isSelected = selectedTab == tab
+                    val isFirstTab = index == 0
+
+                    val buttonModifier = Modifier
+                        .height(56.dp)
+                        .testTag(tab.testTag)
+                        .onGloballyPositioned { coordinates ->
+                            tabBounds[tab] = coordinates.boundsInParent()
+                        }
+                        .then(
+                            if (isFirstTab) {
+                                Modifier.drawWithContent {
+                                    val firstBounds = tabBounds[tabs[0]]
+                                    val firstLeft = firstBounds?.left ?: 0f
+
+                                    if (animatedIndicatorWidth > 0f) {
+                                        drawRoundRect(
+                                            color = primaryColor,
+                                            topLeft = Offset(animatedIndicatorX - firstLeft, 0f),
+                                            size = Size(animatedIndicatorWidth, size.height),
+                                            cornerRadius = CornerRadius(size.height / 2f, size.height / 2f)
+                                        )
+                                    }
+                                    drawContent()
+                                }
+                            } else {
+                                Modifier
+                            }
+                        )
+
+                    ToggleButton(
+                        checked = isSelected,
+                        onCheckedChange = {
                             if (!isSelected) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onTabSelected(tab)
                             }
-                        }
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                        .testTag("tab_" + tab.name.lowercase())
-                ) {
-                    val pillModifier = if (isSelected) {
-                        Modifier
-                            .offset(y = iconOffsetY)
-                            .background(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .padding(horizontal = 14.dp, vertical = 4.dp)
-                    } else {
-                        Modifier
-                            .offset(y = iconOffsetY)
-                            .padding(horizontal = 14.dp, vertical = 4.dp)
-                    }
-
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = pillModifier
+                        },
+                        shapes = ToggleButtonDefaults.shapes(shape = CircleShape),
+                        colors = ToggleButtonDefaults.toggleButtonColors(
+                            containerColor = Color.Transparent,
+                            checkedContainerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            checkedContentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        modifier = buttonModifier
                     ) {
-                        Icon(
-                            imageVector = tab.icon,
-                            contentDescription = tab.title,
-                            tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(horizontal = if (isSelected && (isWideScreen || canShowSelectedLabel)) 14.dp else 10.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isSelected) tab.filledIcon else tab.outlinedIcon,
+                                contentDescription = tab.title,
+                                modifier = Modifier.size(24.dp)
+                            )
 
-                    if (isSelected) {
-                        Text(
-                            text = tab.title,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            lineHeight = 13.sp
-                        )
+                            val showLabel = isWideScreen || (isSelected && canShowSelectedLabel)
+                            AnimatedVisibility(
+                                visible = showLabel,
+                                enter = expandHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(),
+                                exit = shrinkHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeOut()
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = tab.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

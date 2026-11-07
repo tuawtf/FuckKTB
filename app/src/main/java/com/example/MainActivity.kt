@@ -61,7 +61,17 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppRoot(viewModel: PortalViewModel) {
+    val isLoaded by viewModel.isPreferencesLoaded.collectAsState()
     val userPrefs by viewModel.userPreferences.collectAsState()
+
+    if (!isLoaded) {
+        // Tercihler DataStore'dan okunana kadar nötr arka plan göster, açılışta kurulum ekranının parlayıp gitmesini önle
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {}
+        return
+    }
 
     Crossfade(
         targetState = userPrefs.isOnboardingCompleted,

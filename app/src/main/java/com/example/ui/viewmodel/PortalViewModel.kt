@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -73,10 +74,18 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     val updateManager = UpdateManager(application)
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
+    val isPreferencesLoaded: StateFlow<Boolean> = userPrefsRepo.userPreferencesFlow
+        .map { true }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = false
+        )
+
     val userPreferences: StateFlow<UserPreferences> = userPrefsRepo.userPreferencesFlow
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = UserPreferences(
                 phoneNumber = "",
                 isOnboardingCompleted = false,
@@ -87,7 +96,8 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                 latestBetaVersion = "",
                 themeMode = "DARK",
                 colorPalette = "OCEAN",
-                isAmoledMode = false
+                isAmoledMode = false,
+                expressiveBlur = true
             )
         )
 
@@ -101,6 +111,9 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     private var hasFetchedLatestVersionsOnLaunch = false
 
     init {
+        // Güncelleme sonrasında önbellekte kalan eski APK artıklarını sil
+        updateManager.clearApkCache()
+
         viewModelScope.launch {
             userPreferences.collect { prefs ->
                 if (prefs.phoneNumber.isNotBlank() && _uiState.value.phoneNumber.isBlank()) {
@@ -160,6 +173,13 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             userPrefsRepo.setAmoledMode(enabled)
             addLog(LogLevel.INFO, "Amoled görünüm modu: " + if (enabled) "Aktif" else "Devre Dışı")
+        }
+    }
+
+    fun setExpressiveBlur(enabled: Boolean) {
+        viewModelScope.launch {
+            userPrefsRepo.setExpressiveBlur(enabled)
+            addLog(LogLevel.INFO, "Gelişmiş bulanıklık (cam efekti): " + if (enabled) "Aktif" else "Devre Dışı")
         }
     }
 
