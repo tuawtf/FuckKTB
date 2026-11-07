@@ -2739,8 +2739,9 @@ private fun ProfileSubPageContent(
 
     var codeInput by remember { mutableStateOf("") }
     var isValidating by remember { mutableStateOf(false) }
-    var validationError by remember { mutableStateOf<String?>(null) }
     var isErrorCode by remember { mutableStateOf(false) }
+    var errorText by remember { mutableStateOf("Hatalı Kod") }
+    var resendCooldown by remember { mutableIntStateOf(30) }
 
     val focusRequester = remember { FocusRequester() }
 
@@ -2755,8 +2756,16 @@ private fun ProfileSubPageContent(
 
     LaunchedEffect(currentStep) {
         if (currentStep == 3) {
+            resendCooldown = 30
             delay(250)
             focusRequester.requestFocus()
+        }
+    }
+
+    LaunchedEffect(currentStep, resendCooldown) {
+        if (currentStep == 3 && resendCooldown > 0) {
+            delay(1000)
+            resendCooldown -= 1
         }
     }
 
@@ -2765,7 +2774,6 @@ private fun ProfileSubPageContent(
         if (codeInput.length == 6 && !isValidating && !isErrorCode && currentStep == 3) {
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             isValidating = true
-            validationError = null
 
             val phone = com.example.util.PhoneUtils.normalizePhoneNumber("0$phoneDigits")
             val res = viewModel.validateSmsTokenForProfile(phone, codeInput)
@@ -2786,14 +2794,11 @@ private fun ProfileSubPageContent(
                                 raw.contains("invalid", ignoreCase = true) ||
                                 raw.contains("fail", ignoreCase = true)
 
-                if (isCodeErr || msg.isBlank()) {
-                    isErrorCode = true
-                    delay(1500)
-                    codeInput = ""
-                    isErrorCode = false
-                } else {
-                    validationError = "Onaylanmadı"
-                }
+                errorText = if (isCodeErr || msg.isBlank()) "Hatalı Kod" else "Onaylanmadı"
+                isErrorCode = true
+                delay(1500)
+                codeInput = ""
+                isErrorCode = false
             }
         }
     }
@@ -2972,53 +2977,70 @@ private fun ProfileSubPageContent(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // Tek büyük kutu (Sayfanın ortasına yakın, bold font)
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                ),
+                            // Yan yana numara kutusu ve kare Düzenle ikonu kutusu
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 12.dp)
+                                    .padding(vertical = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(vertical = 24.dp, horizontal = 16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(64.dp)
                                 ) {
-                                    val formattedPhone = if (phoneDigits.length == 10) {
-                                        "0${phoneDigits.substring(0, 3)} ${phoneDigits.substring(3, 6)} ${phoneDigits.substring(6, 8)} ${phoneDigits.substring(8, 10)}"
-                                    } else {
-                                        phoneDigits
+                                    Box(contentAlignment = Alignment.Center) {
+                                        val formattedPhone = if (phoneDigits.length == 10) {
+                                            "0${phoneDigits.substring(0, 3)} ${phoneDigits.substring(3, 6)} ${phoneDigits.substring(6, 8)} ${phoneDigits.substring(8, 10)}"
+                                        } else {
+                                            phoneDigits
+                                        }
+                                        Text(
+                                            text = formattedPhone,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontSize = 22.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = UnboundedFontFamily,
+                                            textAlign = TextAlign.Center
+                                        )
                                     }
-                                    Text(
-                                        text = formattedPhone,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontSize = 26.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = UnboundedFontFamily,
-                                        textAlign = TextAlign.Center
-                                    )
+                                }
 
-                                    TextButton(
-                                        onClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            showPhoneEditDialog = true
-                                        },
-                                        modifier = Modifier.testTag("edit_phone_number_button")
-                                    ) {
-                                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Düzenle", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Surface(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        showPhoneEditDialog = true
+                                    },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .testTag("edit_phone_number_button")
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Düzenle",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
                                     }
                                 }
                             }
                         }
 
-                        // Alt Buton Satırı (Bölünmüş Geri + SMS Gönder)
+                        // Alt Buton Satırı (Bölünmüş Geri + Devam Et)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -3063,18 +3085,20 @@ private fun ProfileSubPageContent(
                                     contentColor = MaterialTheme.colorScheme.onPrimary
                                 )
                             ) {
-                                Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Text("Devam Et", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("SMS Gönder", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
                             }
                         }
                     }
                 }
 
-                // ADIM 3: Kod Girişi ve SMS Yakalama (Android Klavye + Otomatik Onay + Hatalı Kod Animasyonu)
+                // ADIM 3: Kod Girişi ve SMS Yakalama (Android Klavye + Otomatik Onay + Birleşik Hata Kutusu + Tekrar Gönder)
                 3 -> {
                     Column(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable { focusRequester.requestFocus() },
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -3110,7 +3134,7 @@ private fun ProfileSubPageContent(
                                     .focusRequester(focusRequester)
                             )
 
-                            // 6 haneli kod kutucukları (veya Hatalı Kod birleşik kutusu)
+                            // 6 haneli kod kutucukları (veya Birleşik Hata Kutusu: Hatalı Kod / Onaylanmadı)
                             AnimatedContent(
                                 targetState = isErrorCode,
                                 transitionSpec = { fadeIn(tween(200)).togetherWith(fadeOut(tween(180))) },
@@ -3124,14 +3148,16 @@ private fun ProfileSubPageContent(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(56.dp)
+                                            .clickable { focusRequester.requestFocus() }
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Text(
-                                                text = "Hatalı Kod",
+                                                text = errorText,
                                                 color = IconColors.ErrorRed,
                                                 fontSize = 18.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                fontFamily = UnboundedFontFamily
+                                                fontFamily = UnboundedFontFamily,
+                                                textAlign = TextAlign.Center
                                             )
                                         }
                                     }
@@ -3153,7 +3179,9 @@ private fun ProfileSubPageContent(
                                                     if (isCurrent) 2.dp else 1.dp,
                                                     if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
                                                 ),
-                                                modifier = Modifier.weight(1f).height(54.dp)
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(54.dp)
                                             ) {
                                                 Box(contentAlignment = Alignment.Center) {
                                                     Text(
@@ -3170,20 +3198,9 @@ private fun ProfileSubPageContent(
                                     }
                                 }
                             }
-
-                            if (validationError != null) {
-                                Text(
-                                    text = validationError ?: "Onaylanmadı",
-                                    color = Color(0xFFF59E0B),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
                         }
 
-                        // Alt Bar (Sol Geri Butonu + Sağ Durum/Yükleniyor)
+                        // Alt Bar (Sol Geri Butonu + Sağ Tekrar Gönder veya Doğrulanıyor)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -3235,6 +3252,42 @@ private fun ProfileSubPageContent(
                                             fontWeight = FontWeight.Medium
                                         )
                                     }
+                                }
+                            } else {
+                                Button(
+                                    onClick = {
+                                        if (resendCooldown == 0) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            val phone = com.example.util.PhoneUtils.normalizePhoneNumber("0$phoneDigits")
+                                            viewModel.updatePhoneNumber(phone)
+                                            viewModel.startConnectionFlow()
+                                            context.findActivity()?.let { SmsCodeSource.startSmsUserConsent(it) }
+                                            resendCooldown = 30
+                                            codeInput = ""
+                                            focusRequester.requestFocus()
+                                            Toast.makeText(context, "SMS Kodu Tekrar Gönderildi", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    enabled = resendCooldown == 0,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp)
+                                        .testTag("resend_sms_token_button"),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (resendCooldown > 0) "Tekrar Gönder ($resendCooldown s)" else "Tekrar Gönder",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         }
