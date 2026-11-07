@@ -296,11 +296,17 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
 
             var ssid: String? = null
             if (isWifi) {
-                @Suppress("DEPRECATION")
-                val wifiInfo = wm?.connectionInfo
-                val rawSsid = wifiInfo?.ssid?.replace("\"", "")
+                val wifiInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    caps?.transportInfo as? android.net.wifi.WifiInfo ?: @Suppress("DEPRECATION") wm?.connectionInfo
+                } else {
+                    @Suppress("DEPRECATION") wm?.connectionInfo
+                }
+
+                val rawSsid = wifiInfo?.ssid?.replace("\"", "")?.trim()
                 if (!rawSsid.isNullOrBlank() && rawSsid != "<unknown ssid>") {
                     ssid = rawSsid
+                } else {
+                    ssid = "KTB-Misafir"
                 }
             }
 
@@ -326,49 +332,70 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun startConnectionFlow(onBeforeRequest: (() -> Unit)? = null) {
-        val currentPhone = _uiState.value.phoneNumber
-        if (!PhoneUtils.isValidTurkishMobile(currentPhone)) {
-            val error = "Geçerli bir cep telefonu numarası gereklidir (Örnek: 05xx xxx xx xx)"
-            _uiState.update { it.copy(errorMessage = error) }
+        val prefs = userPreferences.value
+        if (!prefs.isProfileCreated || prefs.profileUsername.isBlank() || prefs.profilePassword.isBlank()) {
+            val error = "Bağlantı profiliniz bulunamadı. Lütfen önce Bağlantılar sekmesinden profilinizi oluşturun."
+            _uiState.update {
+                it.copy(
+                    step = PortalStep.ERROR,
+                    statusMessage = "Profil Bulunamadı",
+                    errorMessage = error
+                )
+            }
             addLog(LogLevel.ERROR, error)
             return
         }
 
+        if (!_uiState.value.isWifiConnected) {
+            val error = "Lütfen KTB-Misafir ağına bağlanın."
+            _uiState.update {
+                it.copy(
+                    step = PortalStep.ERROR,
+                    statusMessage = "Wi-Fi Bağlı Değil",
+                    errorMessage = error
+                )
+            }
+            addLog(LogLevel.WARNING, error)
+            return
+        }
+
+        val username = prefs.profileUsername
+        val passwordToken = prefs.profilePassword
+
         _uiState.update {
             it.copy(
-                step = PortalStep.REQUESTING_SMS,
-                statusMessage = "SMS Kodu İsteniyor...",
-                errorMessage = null,
-                verificationCode = ""
+                step = PortalStep.VALIDATING,
+                statusMessage = "WLC Ağına Giriş Yapılıyor...",
+                errorMessage = null
             )
         }
 
-        addLog(LogLevel.INFO, "POST http://captive.kultur.gov.tr/users/createSmsToken (" + currentPhone + ")")
+        addLog(LogLevel.INFO, "POST http://ktb-wlc9800-webauth.kultur.gov.tr/login.html ($username)")
 
         onBeforeRequest?.invoke()
 
         viewModelScope.launch {
-            val result = client.createSmsToken(currentPhone)
+            val result = client.loginToWlc(username, passwordToken)
 
             if (result.isSuccess) {
                 _uiState.update {
                     it.copy(
-                        step = PortalStep.WAITING_SMS,
-                        statusMessage = "SMS Kodu Bekleniyor...",
-                        countdownSeconds = 120
+                        step = PortalStep.SUCCESS,
+                        statusMessage = "İnternet Bağlantısı Başarılı!",
+                        errorMessage = null
                     )
                 }
-                addLog(LogLevel.SUCCESS, "SMS talebi iletildi. KUL.TUR.BKN SMS'i bekleniyor.")
-                startCountdown()
+                addLog(LogLevel.SUCCESS, "WLC Oturumu Açıldı! İnternet Bağlantısı Başarılı.")
+                verifyGlobalInternet()
             } else {
                 _uiState.update {
                     it.copy(
                         step = PortalStep.ERROR,
-                        statusMessage = "SMS Talebi Başarısız",
+                        statusMessage = "Giriş Başarısız",
                         errorMessage = result.message
                     )
                 }
-                addLog(LogLevel.ERROR, "SMS Hatası: " + result.message + " (HTTP " + result.httpStatusCode + ")")
+                addLog(LogLevel.ERROR, "WLC Giriş Hatası: " + result.message + " (HTTP " + result.httpStatusCode + ")")
             }
         }
     }

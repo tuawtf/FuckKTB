@@ -6,6 +6,7 @@ import android.net.NetworkCapabilities
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -33,6 +34,7 @@ class CaptivePortalClient(
         private const val BASE_URL = "http://captive.kultur.gov.tr"
         private const val CREATE_SMS_TOKEN_URL = "$BASE_URL/users/createSmsToken"
         private const val VALIDATE_SMS_TOKEN_URL = "$BASE_URL/users/validateSmsToken"
+        private const val WLC_LOGIN_URL = "http://ktb-wlc9800-webauth.kultur.gov.tr/login.html"
         private const val CONNECTIVITY_CHECK_URL = "http://connectivitycheck.gstatic.com/generate_204"
 
         // Nginx / Express sunucu beklentisi olan basliklar
@@ -183,6 +185,61 @@ class CaptivePortalClient(
                 PortalResult(
                     isSuccess = false,
                     message = "Dogrulama hatasi: ${e.localizedMessage}",
+                    httpStatusCode = -1
+                )
+            }
+        }
+
+    /**
+     * 3. ADIM: Cisco WLC 9800 WebAuth giris istegi.
+     *
+     * Method: POST
+     * URL: http://ktb-wlc9800-webauth.kultur.gov.tr/login.html
+     * Form Body: username, password, buttonClicked="4", err_flag="0", ok="submit"
+     * Headers: Origin, Referer, User-Agent
+     */
+    suspend fun loginToWlc(username: String, passwordToken: String): PortalResult =
+        withContext(Dispatchers.IO) {
+            bindProcessToWifiNetwork()
+
+            val formBody = FormBody.Builder()
+                .add("username", username)
+                .add("password", passwordToken)
+                .add("buttonClicked", "4")
+                .add("err_flag", "0")
+                .add("ok", "submit")
+                .build()
+
+            val request = Request.Builder()
+                .url(WLC_LOGIN_URL)
+                .addHeader("Origin", HEADER_ORIGIN)
+                .addHeader("Referer", HEADER_REFERER)
+                .addHeader("User-Agent", HEADER_USER_AGENT)
+                .post(formBody)
+                .build()
+
+            try {
+                client.newCall(request).execute().use { response ->
+                    val bodyString = response.body?.string().orEmpty()
+                    val statusCode = response.code
+                    val isSuccess = response.isSuccessful || statusCode == 200
+                    PortalResult(
+                        isSuccess = isSuccess,
+                        message = if (isSuccess) "WLC Ağına Giriş Yapıldı!" else "WLC Hata Kodu: $statusCode",
+                        rawResponse = bodyString,
+                        httpStatusCode = statusCode
+                    )
+                }
+            } catch (e: IOException) {
+                PortalResult(
+                    isSuccess = false,
+                    message = "WLC Bağlantı hatası: ${e.localizedMessage ?: "Cisco WLC 9800 kapısına ulaşılamadı. KTB-Misafir ağına bağlı olduğunuzdan emin olun."}",
+                    httpStatusCode = -1
+                )
+            } catch (e: Exception) {
+                PortalResult(
+                    isSuccess = false,
+                    message = "Beklenmeyen WLC hatası: ${e.localizedMessage}",
                     httpStatusCode = -1
                 )
             }

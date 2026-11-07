@@ -47,6 +47,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
@@ -125,6 +126,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -212,7 +214,7 @@ fun MainScreen(
                 label = "main_tab_content"
             ) { tab ->
                 when (tab) {
-                    MainTab.HOME -> ConnectTabContent(viewModel = viewModel)
+                    MainTab.HOME -> ConnectTabContent(viewModel = viewModel, onNavigateToTab = { selectedTab = it })
                     MainTab.CONNECTIONS -> ConnectionsTabContent(
                         activeSubPage = activeSubPage,
                         viewModel = viewModel,
@@ -248,28 +250,20 @@ fun MainScreen(
 // 1. SEKME: BAĞLAN (HOME)
 // -------------------------------------------------------------
 @Composable
-private fun ConnectTabContent(viewModel: PortalViewModel) {
+private fun ConnectTabContent(
+    viewModel: PortalViewModel,
+    onNavigateToTab: (MainTab) -> Unit
+) {
     val uiState by viewModel.uiState.collectAsState()
-    var showManualCodeDialog by remember { mutableStateOf(false) }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "beacon")
-    val beaconAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "beaconAlpha"
-    )
+    val userPrefs by viewModel.userPreferences.collectAsState()
+    var showNoProfileDialog by remember { mutableStateOf(false) }
 
     val cardColor by animateColorAsState(
         targetValue = when (uiState.step) {
             PortalStep.SUCCESS -> IconColors.SuccessGreen.copy(alpha = 0.14f)
             PortalStep.ERROR -> IconColors.ErrorRed.copy(alpha = 0.14f)
-            PortalStep.WAITING_SMS -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-            PortalStep.REQUESTING_SMS, PortalStep.VALIDATING -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-            PortalStep.IDLE -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            PortalStep.VALIDATING -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
         },
         label = "cardColor"
     )
@@ -350,35 +344,6 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
                         textAlign = TextAlign.Center
                     )
 
-                    if (uiState.step == PortalStep.WAITING_SMS) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.HourglassEmpty,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "Kalan Süre: ${uiState.countdownSeconds} sn (KUL.TUR.BKN)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        LinearProgressIndicator(
-                            progress = { (uiState.countdownSeconds / 120f).coerceIn(0f, 1f) },
-                            modifier = Modifier
-                                .fillMaxWidth(0.6f)
-                                .height(5.dp)
-                                .clip(RoundedCornerShape(3.dp)),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    }
-
                     if (!uiState.errorMessage.isNullOrBlank()) {
                         Text(
                             text = uiState.errorMessage ?: "",
@@ -390,11 +355,9 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
                 }
             }
 
-            val context = LocalContext.current
             val buttonBgColor = when (uiState.step) {
                 PortalStep.SUCCESS -> IconColors.SuccessGreen
-                PortalStep.WAITING_SMS -> MaterialTheme.colorScheme.primary
-                PortalStep.REQUESTING_SMS, PortalStep.VALIDATING -> MaterialTheme.colorScheme.secondary
+                PortalStep.VALIDATING -> MaterialTheme.colorScheme.secondary
                 else -> MaterialTheme.colorScheme.primary
             }
             val buttonContentColor = when (uiState.step) {
@@ -404,15 +367,13 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
 
             Surface(
                 onClick = {
-                    if (uiState.step == PortalStep.IDLE || uiState.step == PortalStep.ERROR || uiState.step == PortalStep.SUCCESS) {
-                        val activity = context as? MainActivity
-                        activity?.triggerSmsConsent()
-                        viewModel.startConnectionFlow {
-                            activity?.triggerSmsConsent()
-                        }
+                    if (!userPrefs.isProfileCreated || userPrefs.profileUsername.isBlank() || userPrefs.profilePassword.isBlank()) {
+                        showNoProfileDialog = true
+                    } else if (uiState.step != PortalStep.VALIDATING) {
+                        viewModel.startConnectionFlow()
                     }
                 },
-                enabled = uiState.step != PortalStep.REQUESTING_SMS && uiState.step != PortalStep.VALIDATING,
+                enabled = uiState.step != PortalStep.VALIDATING,
                 shape = CircleShape,
                 color = buttonBgColor,
                 contentColor = buttonContentColor,
@@ -431,7 +392,7 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
                         verticalArrangement = Arrangement.Center
                     ) {
                         when (uiState.step) {
-                            PortalStep.REQUESTING_SMS, PortalStep.VALIDATING -> {
+                            PortalStep.VALIDATING -> {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(44.dp),
                                     color = buttonContentColor,
@@ -439,23 +400,7 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
                                 Text(
-                                    text = if (uiState.step == PortalStep.REQUESTING_SMS) "SMS İsteniyor" else "Giriş Yapılıyor",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = buttonContentColor
-                                )
-                            }
-                            PortalStep.WAITING_SMS -> {
-                                Icon(
-                                    imageVector = Icons.Default.Sms,
-                                    contentDescription = null,
-                                    tint = buttonContentColor,
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .alpha(beaconAlpha)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "SMS Bekleniyor",
+                                    text = "Giriş Yapılıyor",
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                     color = buttonContentColor
                                 )
@@ -488,7 +433,7 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
                                     color = buttonContentColor
                                 )
                             }
-                            PortalStep.IDLE -> {
+                            else -> {
                                 Icon(
                                     imageVector = Icons.Default.Wifi,
                                     contentDescription = null,
@@ -508,46 +453,45 @@ private fun ConnectTabContent(viewModel: PortalViewModel) {
             }
 
             AnimatedVisibility(
-                visible = uiState.step == PortalStep.WAITING_SMS || uiState.step == PortalStep.ERROR,
+                visible = uiState.step == PortalStep.ERROR,
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                OutlinedButton(
+                    onClick = { viewModel.resetState() },
+                    modifier = Modifier.testTag("cancel_connect_button")
                 ) {
-                    FilledTonalButton(
-                        onClick = { showManualCodeDialog = true },
-                        modifier = Modifier.testTag("manual_code_dialog_button")
-                    ) {
-                        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Kodu Elle Gir", style = MaterialTheme.typography.labelMedium)
-                    }
-
-                    OutlinedButton(
-                        onClick = { viewModel.resetState() },
-                        modifier = Modifier.testTag("cancel_connect_button")
-                    ) {
-                        Text("İptal", style = MaterialTheme.typography.labelMedium)
-                    }
+                    Text("Sıfırla", style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
 
         Text(
-            text = "Kayıtlı Numara: " + PhoneUtils.formatForDisplay(uiState.phoneNumber),
+            text = if (userPrefs.isProfileCreated) "Kayıtlı Profil: ${userPrefs.profileUsername}" else "Bağlantı Profili Oluşturulmadı",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 
-    if (showManualCodeDialog) {
-        ManualCodeDialog(
-            currentCode = uiState.verificationCode,
-            onDismiss = { showManualCodeDialog = false },
-            onValidate = { code ->
-                viewModel.validateSmsToken(code)
-                showManualCodeDialog = false
+    if (showNoProfileDialog) {
+        AlertDialog(
+            onDismissRequest = { showNoProfileDialog = false },
+            title = { Text("Profil Bulunamadı") },
+            text = { Text("Bağlantı profiliniz bulunamadı. Lütfen önce Bağlantılar sekmesinden profilinizi oluşturun.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showNoProfileDialog = false
+                        onNavigateToTab(MainTab.CONNECTIONS)
+                    }
+                ) {
+                    Text("Bağlantılara Git")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNoProfileDialog = false }) {
+                    Text("Kapat")
+                }
             }
         )
     }
@@ -2424,277 +2368,325 @@ private fun ManualCodeDialog(
 private fun ConnectionsTabContent(
     activeSubPage: String?,
     viewModel: PortalViewModel,
-    onSelectSubPage: (String) -> Unit
+    onSelectSubPage: (String?) -> Unit
 ) {
+    val userPrefs by viewModel.userPreferences.collectAsState()
+    val isProfileCreated = userPrefs.isProfileCreated
+    val haptic = LocalHapticFeedback.current
+
     if (activeSubPage == "Profilim") {
+        if (isProfileCreated) {
+            ProfileDetailScreen(
+                viewModel = viewModel,
+                onBackClick = { onSelectSubPage(null) },
+                onReconfigure = { onSelectSubPage("Profilim_Sihirbaz") }
+            )
+        } else {
+            ProfileSubPageContent(
+                viewModel = viewModel,
+                onFinishSetup = { onSelectSubPage(null) }
+            )
+        }
+    } else if (activeSubPage == "Profilim_Sihirbaz") {
         ProfileSubPageContent(
             viewModel = viewModel,
-            onFinishSetup = { onSelectSubPage("") }
+            onFinishSetup = { onSelectSubPage(null) }
         )
     } else {
-        val userPrefs by viewModel.userPreferences.collectAsState()
-        val isProfileCreated = userPrefs.isProfileCreated
-        val haptic = LocalHapticFeedback.current
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. Üst Kısım: "Bağlantı Profilim" Kartı
+            // "Bağlantı Profilim" Kartı
             item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onSelectSubPage("Profilim")
-                        }
-                        .testTag("connection_profile_card"),
+                Surface(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSelectSubPage("Profilim")
+                    },
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                    color = Color(0xFF161A22),
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp,
                         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-                    )
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("connection_profile_card")
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFF9EC5EA).copy(alpha = 0.15f),
+                                modifier = Modifier.size(42.dp)
                             ) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = if (isProfileCreated) IconColors.SuccessGreen.copy(alpha = 0.15f) else Color(0xFFF59E0B).copy(alpha = 0.15f),
-                                    modifier = Modifier.size(38.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = if (isProfileCreated) Icons.Default.CheckCircle else Icons.Default.AccountBox,
-                                            contentDescription = null,
-                                            tint = if (isProfileCreated) IconColors.SuccessGreen else Color(0xFFF59E0B),
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-
-                                Text(
-                                    text = "Bağlantı Profilim",
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            if (isProfileCreated) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = IconColors.SuccessGreen.copy(alpha = 0.15f)
-                                ) {
-                                    Text(
-                                        text = "Profil Aktif",
-                                        color = IconColors.SuccessGreen,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Badge,
+                                        contentDescription = null,
+                                        tint = Color(0xFF9EC5EA),
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
+
+                            Text(
+                                text = "Bağlantı Profilim",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
 
-                        if (!isProfileCreated) {
+                        if (isProfileCreated) {
+                            // Panel boyunca yatayda uzanan yeşil kapsül kutu
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFF064E3B).copy(alpha = 0.6f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF059669)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = Color(0xFF34D399),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "Profiliniz tamamlandı.",
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        } else {
                             // Profiliniz oluşturulmadı Uyarısı
                             Surface(
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = Color(0xFF332A15),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(14.dp),
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ErrorOutline,
                                         contentDescription = null,
                                         tint = Color(0xFFF59E0B),
-                                        modifier = Modifier.size(26.dp)
-                                    )
-
-                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text(
-                                            text = "Profiliniz oluşturulmadı.",
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "KTB Wi-Fi otomatik giriş profili oluşturmak için dokunun.",
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 13.sp,
-                                            lineHeight = 18.sp
-                                        )
-                                    }
-                                }
-                            }
-
-                            Button(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    onSelectSubPage("Profilim")
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(46.dp)
-                                    .testTag("start_profile_setup_button"),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                )
-                            ) {
-                                Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Kurulum Yap", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                            }
-                        } else {
-                            // Profil Detayları
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Kullanıcı Adı:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                                    Text(userPrefs.profileUsername, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                                }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Erişim Şifresi / Token:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                                    Text(userPrefs.profilePassword, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        onSelectSubPage("Profilim")
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(42.dp),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("Yeniden Yapılandır", fontSize = 13.sp)
-                                }
-
-                                TextButton(
-                                    onClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        viewModel.clearConnectionProfile()
-                                    },
-                                    modifier = Modifier.height(42.dp)
-                                ) {
-                                    Text("Profili Sil", color = IconColors.ErrorRed, fontSize = 13.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 2. Kısım: "Kayıtlı Kütüphane Ağları" Kartı
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Wifi,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Text(
-                                text = "Kayıtlı Kütüphane Ağları",
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(
-                                        text = "KTB-Misafir",
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold
+                                        modifier = Modifier.size(22.dp)
                                     )
                                     Text(
-                                        text = "Kültür ve Turizm Bakanlığı Kütüphaneleri",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 12.sp
+                                        text = "Profiliniz oluşturulmadı. Kurulum yapmak için dokunun.",
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
                                     )
                                 }
-
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = IconColors.SuccessGreen,
-                                    modifier = Modifier.size(20.dp)
-                                )
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+// -------------------------------------------------------------
+// "PROFİLİM" DETAY SAYFASI (ProfileDetailScreen)
+// -------------------------------------------------------------
+@Composable
+private fun ProfileDetailScreen(
+    viewModel: PortalViewModel,
+    onBackClick: () -> Unit,
+    onReconfigure: () -> Unit
+) {
+    val userPrefs by viewModel.userPreferences.collectAsState()
+    val haptic = LocalHapticFeedback.current
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        // Ekran Ortası (Profil Bilgi Kartları)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                // 1. Kullanıcı Adı Kutusu
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "Kullanıcı Adı",
+                        color = Color(0xFF8E95A5),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFF1E232E),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.CenterStart,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 18.dp)
+                        ) {
+                            Text(
+                                text = userPrefs.profileUsername.ifBlank { userPrefs.phoneNumber },
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = UnboundedFontFamily
+                            )
+                        }
+                    }
+                }
+
+                // 2. Erişim Şifresi / Token Kutusu
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "Erişim Şifresi / Token",
+                        color = Color(0xFF8E95A5),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFF1E232E),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.CenterStart,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 18.dp)
+                        ) {
+                            Text(
+                                text = userPrefs.profilePassword.ifBlank { "f9642d0cd3" },
+                                color = Color(0xFF9EC5EA),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Ekranın En Altı (İşlem Butonları)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onReconfigure()
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp)
+                    .testTag("reconfigure_profile_button"),
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Text("Yeniden Yapılandır", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+
+            Button(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    showDeleteDialog = true
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp)
+                    .testTag("delete_profile_button"),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF7F1D1D),
+                    contentColor = Color(0xFFF87171)
+                )
+            ) {
+                Text("Profili Sil", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Profili Sil") },
+            text = { Text("Kayıtlı otomatik bağlantı profilinizi silmek istediğinize emin misiniz?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        viewModel.clearConnectionProfile()
+                        showDeleteDialog = false
+                        onBackClick()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = IconColors.ErrorRed,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text("Sil")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Vazgeç")
+                }
+            }
+        )
     }
 }
 
@@ -2719,6 +2711,7 @@ private fun ProfileSubPageContent(
     val userPrefs by viewModel.userPreferences.collectAsState()
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val coroutineScope = rememberCoroutineScope()
 
     var currentStep by remember { mutableIntStateOf(1) }
@@ -2759,6 +2752,7 @@ private fun ProfileSubPageContent(
             resendCooldown = 30
             delay(250)
             focusRequester.requestFocus()
+            keyboardController?.show()
         }
     }
 
@@ -3098,7 +3092,10 @@ private fun ProfileSubPageContent(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .clickable { focusRequester.requestFocus() },
+                            .clickable {
+                                focusRequester.requestFocus()
+                                keyboardController?.show()
+                            },
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -3119,84 +3116,99 @@ private fun ProfileSubPageContent(
                                 )
                             }
 
-                            // Görünmeyen Sistem Klavyesi Giriş Alanı
-                            BasicTextField(
-                                value = codeInput,
-                                onValueChange = { input ->
-                                    if (input.length <= 6 && input.all { it.isDigit() } && !isErrorCode && !isValidating) {
-                                        codeInput = input
-                                    }
-                                },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            // 6 haneli kod giriş alanı (Dokununca klavyeyi kesin açar)
+                            Box(
                                 modifier = Modifier
-                                    .size(1.dp)
-                                    .alpha(0.01f)
-                                    .focusRequester(focusRequester)
-                            )
+                                    .fillMaxWidth()
+                                    .height(56.dp)
+                                    .clickable {
+                                        focusRequester.requestFocus()
+                                        keyboardController?.show()
+                                    }
+                            ) {
+                                BasicTextField(
+                                    value = codeInput,
+                                    onValueChange = { input ->
+                                        if (input.length <= 6 && input.all { it.isDigit() } && !isErrorCode && !isValidating) {
+                                            codeInput = input
+                                        }
+                                    },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .alpha(0.01f)
+                                        .focusRequester(focusRequester)
+                                )
 
-                            // 6 haneli kod kutucukları (veya Birleşik Hata Kutusu: Hatalı Kod / Onaylanmadı)
-                            AnimatedContent(
-                                targetState = isErrorCode,
-                                transitionSpec = { fadeIn(tween(200)).togetherWith(fadeOut(tween(180))) },
-                                label = "code_box_merge_anim"
-                            ) { errorState ->
-                                if (errorState) {
-                                    Surface(
-                                        shape = RoundedCornerShape(14.dp),
-                                        color = IconColors.ErrorRed.copy(alpha = 0.15f),
-                                        border = androidx.compose.foundation.BorderStroke(1.5.dp, IconColors.ErrorRed),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(56.dp)
-                                            .clickable { focusRequester.requestFocus() }
-                                    ) {
-                                        Box(
-                                            contentAlignment = Alignment.CenterStart,
+                                AnimatedContent(
+                                    targetState = isErrorCode,
+                                    transitionSpec = { fadeIn(tween(200)).togetherWith(fadeOut(tween(180))) },
+                                    label = "code_box_merge_anim",
+                                    modifier = Modifier.fillMaxSize()
+                                ) { errorState ->
+                                    if (errorState) {
+                                        Surface(
+                                            shape = RoundedCornerShape(14.dp),
+                                            color = IconColors.ErrorRed.copy(alpha = 0.15f),
+                                            border = androidx.compose.foundation.BorderStroke(1.5.dp, IconColors.ErrorRed),
                                             modifier = Modifier
                                                 .fillMaxSize()
-                                                .padding(horizontal = 18.dp)
+                                                .clickable {
+                                                    focusRequester.requestFocus()
+                                                    keyboardController?.show()
+                                                }
                                         ) {
-                                            Text(
-                                                text = errorText.uppercase(java.util.Locale.getDefault()),
-                                                color = IconColors.ErrorRed,
-                                                fontSize = 18.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                fontFamily = UnboundedFontFamily,
-                                                textAlign = TextAlign.Start
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { focusRequester.requestFocus() },
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-                                    ) {
-                                        (0..5).forEach { index ->
-                                            val digit = codeInput.getOrNull(index)?.toString() ?: ""
-                                            val isCurrent = index == codeInput.length.coerceAtMost(5)
-
-                                            Surface(
-                                                shape = RoundedCornerShape(12.dp),
-                                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                border = androidx.compose.foundation.BorderStroke(
-                                                    if (isCurrent) 2.dp else 1.dp,
-                                                    if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                                                ),
+                                            Box(
+                                                contentAlignment = Alignment.CenterStart,
                                                 modifier = Modifier
-                                                    .weight(1f)
-                                                    .height(54.dp)
+                                                    .fillMaxSize()
+                                                    .padding(horizontal = 18.dp)
                                             ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Text(
-                                                        text = digit,
-                                                        color = MaterialTheme.colorScheme.onSurface,
-                                                        fontSize = 22.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontFamily = UnboundedFontFamily,
-                                                        textAlign = TextAlign.Center
-                                                    )
+                                                Text(
+                                                    text = errorText.uppercase(java.util.Locale.getDefault()),
+                                                    color = IconColors.ErrorRed,
+                                                    fontSize = 18.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontFamily = UnboundedFontFamily,
+                                                    textAlign = TextAlign.Start
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clickable {
+                                                    focusRequester.requestFocus()
+                                                    keyboardController?.show()
+                                                },
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                                        ) {
+                                            (0..5).forEach { index ->
+                                                val digit = codeInput.getOrNull(index)?.toString() ?: ""
+                                                val isCurrent = index == codeInput.length.coerceAtMost(5)
+
+                                                Surface(
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                    border = androidx.compose.foundation.BorderStroke(
+                                                        if (isCurrent) 2.dp else 1.dp,
+                                                        if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                                    ),
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .height(54.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Text(
+                                                            text = digit,
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                            fontSize = 22.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontFamily = UnboundedFontFamily,
+                                                            textAlign = TextAlign.Center
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
