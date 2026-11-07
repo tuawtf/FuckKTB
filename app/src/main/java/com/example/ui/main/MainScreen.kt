@@ -2740,7 +2740,7 @@ private fun ProfileSubPageContent(
     var codeInput by remember { mutableStateOf("") }
     var isValidating by remember { mutableStateOf(false) }
     var isErrorCode by remember { mutableStateOf(false) }
-    var errorText by remember { mutableStateOf("Hatalı Kod") }
+    var errorText by remember { mutableStateOf("HATALI KOD") }
     var resendCooldown by remember { mutableIntStateOf(30) }
 
     val focusRequester = remember { FocusRequester() }
@@ -2794,7 +2794,7 @@ private fun ProfileSubPageContent(
                                 raw.contains("invalid", ignoreCase = true) ||
                                 raw.contains("fail", ignoreCase = true)
 
-                errorText = if (isCodeErr || msg.isBlank()) "Hatalı Kod" else "Onaylanmadı"
+                errorText = if (isCodeErr || msg.isBlank()) "HATALI KOD" else "ONAYLANMADI"
                 isErrorCode = true
                 delay(1500)
                 codeInput = ""
@@ -3150,14 +3150,19 @@ private fun ProfileSubPageContent(
                                             .height(56.dp)
                                             .clickable { focusRequester.requestFocus() }
                                     ) {
-                                        Box(contentAlignment = Alignment.Center) {
+                                        Box(
+                                            contentAlignment = Alignment.CenterStart,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(horizontal = 18.dp)
+                                        ) {
                                             Text(
-                                                text = errorText,
+                                                text = errorText.uppercase(java.util.Locale.getDefault()),
                                                 color = IconColors.ErrorRed,
                                                 fontSize = 18.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 fontFamily = UnboundedFontFamily,
-                                                textAlign = TextAlign.Center
+                                                textAlign = TextAlign.Start
                                             )
                                         }
                                     }
