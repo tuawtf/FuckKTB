@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Switch
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Warning
@@ -85,7 +86,6 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -144,7 +144,6 @@ fun MainScreen(
     val updateCheckState by viewModel.updateCheckState.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
 
-    // Açılışta güncelleme kontrolü ayarı aktifse ve yeni sürüm bulunduysa paneli göster
     LaunchedEffect(updateCheckState, userPrefs.checkUpdatesOnLaunch) {
         if (userPrefs.checkUpdatesOnLaunch && !hasAutoOpenedSheetOnLaunch) {
             if (updateCheckState is UpdateCheckResult.UpdateAvailable) {
@@ -652,7 +651,7 @@ private fun LogsTabContent(viewModel: PortalViewModel) {
                     OutlinedCard(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                     ) {
                         Row(
                             modifier = Modifier
@@ -752,7 +751,7 @@ private fun SettingsTabContent(
                             .fillMaxWidth()
                             .testTag("settings_group_network"),
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
                             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
@@ -794,7 +793,7 @@ private fun SettingsTabContent(
                             .fillMaxWidth()
                             .testTag("settings_group_preferences"),
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
                             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
@@ -847,7 +846,7 @@ private fun SettingsTabContent(
                                 .fillMaxWidth()
                                 .testTag("settings_group_about"),
                             shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                             border = androidx.compose.foundation.BorderStroke(
                                 1.dp,
                                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
@@ -911,7 +910,7 @@ private fun SettingsMenuItem(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -1222,7 +1221,7 @@ private fun UpdatesSubPageContent(
                     .fillMaxWidth()
                     .testTag("update_channel_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
@@ -1284,7 +1283,7 @@ private fun UpdatesSubPageContent(
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
@@ -1319,7 +1318,7 @@ private fun UpdatesSubPageContent(
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
@@ -1344,7 +1343,7 @@ private fun UpdatesSubPageContent(
                     .fillMaxWidth()
                     .testTag("manual_update_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
@@ -1501,7 +1500,7 @@ private fun UpdatesSubPageContent(
                     .fillMaxWidth()
                     .testTag("auto_check_card"),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
@@ -1553,7 +1552,7 @@ private fun UpdatesSubPageContent(
 }
 
 // -------------------------------------------------------------
-// GÖRÜNÜM ALT SAYFASI (TEMA, RENK PALETİ VE AMOLED SWITCH)
+// GÖRÜNÜM ALT SAYFASI (REFERANS GÖRSELE UYGUN "UYGULAMA TEMASI" KARTI)
 // -------------------------------------------------------------
 @Composable
 private fun AppearanceSubPageContent(
@@ -1573,84 +1572,95 @@ private fun AppearanceSubPageContent(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Blok: Tema Kartı
+        // 1. Blok: Uygulama Teması Kartı (Referans Görsel Tasarımı)
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("theme_card"),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
                 )
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
+                    // Başlık: Ay İkonu ve "Uygulama Teması"
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.DarkMode,
-                            contentDescription = "Tema",
-                            tint = MaterialTheme.colorScheme.primary,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(24.dp)
                         )
                         Text(
-                            text = "Tema",
+                            text = "Uygulama Teması",
                             color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
 
+                    // Alt Kısım: Referans görseldeki gibi yan yana 3 bağımsız kapsül buton: [Sistem] [Koyu] [Açık]
                     val themeOptions = listOf(
                         "SYSTEM" to "Sistem",
-                        "LIGHT" to "Aydınlık",
-                        "DARK" to "Karanlık"
+                        "DARK" to "Koyu",
+                        "LIGHT" to "Açık"
                     )
 
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            themeOptions.forEach { (modeKey, modeTitle) ->
-                                val isSelected = currentThemeMode == modeKey
+                        themeOptions.forEach { (modeKey, modeTitle) ->
+                            val isSelected = currentThemeMode == modeKey
 
-                                val pillColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-                                val textColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            val pillBgColor = if (isSelected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                            val pillTextColor = if (isSelected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
 
-                                Surface(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .clickable {
-                                            if (!isSelected) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                viewModel.setThemeMode(modeKey)
-                                            }
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        if (!isSelected) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            viewModel.setThemeMode(modeKey)
                                         }
-                                        .testTag("theme_option_${modeKey.lowercase()}"),
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = pillColor
+                                    }
+                                    .testTag("theme_option_${modeKey.lowercase()}"),
+                                shape = CircleShape,
+                                color = pillBgColor
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.fillMaxSize()
                                 ) {
                                     Text(
                                         text = modeTitle,
-                                        color = textColor,
-                                        fontSize = 13.sp,
+                                        color = pillTextColor,
+                                        fontSize = 14.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                                        textAlign = TextAlign.Center
                                     )
                                 }
                             }
@@ -1666,8 +1676,8 @@ private fun AppearanceSubPageContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("color_palette_card"),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
@@ -1686,7 +1696,7 @@ private fun AppearanceSubPageContent(
                         Icon(
                             imageVector = Icons.Default.Palette,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(24.dp)
                         )
                         Text(
@@ -1811,8 +1821,8 @@ private fun AppearanceSubPageContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("amoled_mode_card"),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
@@ -2192,7 +2202,7 @@ private fun UpdateDownloadBottomSheet(
                                 Icon(
                                     imageVector = Icons.Default.CloudDownload,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
@@ -2322,7 +2332,7 @@ private fun SettingsSubPagePlaceholder(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(36.dp)
                     )
                 }
@@ -2416,7 +2426,7 @@ private fun ConnectionsTabContent() {
                     Icon(
                         imageVector = Icons.Default.AccountTree,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(36.dp)
                     )
                 }
@@ -2570,11 +2580,11 @@ private fun CustomBottomBar(
                                 color = MaterialTheme.colorScheme.primaryContainer,
                                 shape = RoundedCornerShape(12.dp)
                             )
-                            .padding(horizontal = 22.dp, vertical = 5.dp)
+                            .padding(horizontal = 14.dp, vertical = 4.dp)
                     } else {
                         Modifier
                             .offset(y = iconOffsetY)
-                            .padding(horizontal = 16.dp, vertical = 5.dp)
+                            .padding(horizontal = 14.dp, vertical = 4.dp)
                     }
 
                     Box(
@@ -2584,7 +2594,7 @@ private fun CustomBottomBar(
                         Icon(
                             imageVector = tab.icon,
                             contentDescription = tab.title,
-                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
                         )
                     }
