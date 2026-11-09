@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
@@ -218,6 +219,15 @@ fun MainScreen(
                 hasAutoOpenedSheetOnLaunch = true
                 showUpdateBottomSheet = true
             }
+        }
+    }
+
+    // Uygulama ekrandayken ağ durumunu anında ve her 10 saniyede bir kontrol et
+    LaunchedEffect(Unit) {
+        viewModel.checkWifiState()
+        while (true) {
+            delay(10_000)
+            viewModel.checkWifiState()
         }
     }
 
@@ -740,19 +750,6 @@ private fun LogsTabContent(viewModel: PortalViewModel) {
                     }
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedButton(
-            onClick = { viewModel.simulateSmsArrival() },
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("simulate_sms_button")
-        ) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Örnek SMS Gönder (Test Simülasyonu)")
         }
     }
 }
@@ -3010,7 +3007,25 @@ private fun ProfileSubPageContent(
         }
     }
 
-    val isKtbConnected = uiState.isKtbNetworkConfirmed || uiState.wifiSsid?.contains("KTB", ignoreCase = true) == true || uiState.isWifiConnected
+    val shakeOffsetX = remember { Animatable(0f) }
+    val shakeOffsetY = remember { Animatable(0f) }
+
+    // Profil sihirbazına girildiğinde ve Adım 1'deyken:
+    // Bağlı ise her 10 saniyede bir, değilse her 5 saniyede bir kontrol et. İleri (currentStep > 1) basılınca durur.
+    LaunchedEffect(currentStep, uiState.isKtbNetworkConfirmed) {
+        if (currentStep == 1) {
+            viewModel.checkWifiState()
+            while (currentStep == 1) {
+                val delayTime = if (uiState.isKtbNetworkConfirmed) 10_000L else 5_000L
+                delay(delayTime)
+                if (currentStep == 1) {
+                    viewModel.checkWifiState()
+                }
+            }
+        }
+    }
+
+    val isKtbConnected = uiState.isKtbNetworkConfirmed
 
     Column(
         modifier = Modifier
@@ -3080,7 +3095,7 @@ private fun ProfileSubPageContent(
                                 )
                             }
 
-                            // Wi-Fi Durum Kartı
+                            // Wi-Fi Durum Kartı (Bağlı değilken devam et tuşuna basıldığında sağa-sola yukarı-aşağı titrer)
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
                                 color = if (isKtbConnected) IconColors.SuccessGreen.copy(alpha = 0.15f) else Color(0xFF332A15),
@@ -3088,7 +3103,9 @@ private fun ProfileSubPageContent(
                                     1.dp,
                                     if (isKtbConnected) IconColors.SuccessGreen else Color(0xFFF59E0B)
                                 ),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .offset(x = shakeOffsetX.value.dp, y = shakeOffsetY.value.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.padding(16.dp),
@@ -3140,9 +3157,31 @@ private fun ProfileSubPageContent(
 
                         Button(
                             onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                currentStep = 2
+                                if (isKtbConnected) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    currentStep = 2
+                                } else {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    // Sağa sola yukarı aşağı hızlı titreme animasyonu
+                                    coroutineScope.launch {
+                                        val shakeValues = listOf(
+                                            Pair(-14f, 4f),
+                                            Pair(14f, -4f),
+                                            Pair(-10f, 6f),
+                                            Pair(10f, -6f),
+                                            Pair(-6f, 3f),
+                                            Pair(6f, -3f),
+                                            Pair(-2f, 1f),
+                                            Pair(0f, 0f)
+                                        )
+                                        for ((dx, dy) in shakeValues) {
+                                            launch { shakeOffsetX.animateTo(dx, tween(30)) }
+                                            shakeOffsetY.animateTo(dy, tween(30))
+                                        }
+                                    }
+                                }
                             },
+                            enabled = isKtbConnected,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(56.dp)
@@ -3150,7 +3189,9 @@ private fun ProfileSubPageContent(
                             shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
                         ) {
                             Text("Devam Et", fontSize = 16.sp, fontWeight = FontWeight.Bold)

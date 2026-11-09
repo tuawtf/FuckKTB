@@ -64,6 +64,7 @@ data class PortalUiState(
     val isWifiConnected: Boolean = false,
     val wifiSsid: String? = null,
     val isKtbNetworkConfirmed: Boolean = false,
+    val isSessionActive: Boolean = false,
     val logs: List<LogItem> = emptyList()
 )
 
@@ -327,35 +328,64 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
 
             if (!isWifi) {
                 _uiState.update {
-                    it.copy(isWifiConnected = false, wifiSsid = null, isKtbNetworkConfirmed = false)
+                    it.copy(
+                        isWifiConnected = false,
+                        wifiSsid = null,
+                        isKtbNetworkConfirmed = false,
+                        isSessionActive = false
+                    )
                 }
                 return
             }
 
             viewModelScope.launch {
-                val isKtbConfirmed = client.probeKtbNetwork()
-                if (isKtbConfirmed) {
+                // Ping Google (checkInternetConnectivity) ve Ping Captive Portal (probeKtbNetwork)
+                val isGoogleSuccess = client.checkInternetConnectivity()
+                val isCaptiveSuccess = client.probeKtbNetwork()
+
+                if (isGoogleSuccess && isCaptiveSuccess) {
+                    // Google başarılı VE captive.kultur.gov.tr başarılı -> KTB-Misafir ağında ve oturum açmış
                     _uiState.update {
                         it.copy(
                             isWifiConnected = true,
                             wifiSsid = "KTB-Misafir",
-                            isKtbNetworkConfirmed = true
+                            isKtbNetworkConfirmed = true,
+                            isSessionActive = true
                         )
                     }
-                    addLog(LogLevel.INFO, "KTB Ağ Doğrulaması: captive.kultur.gov.tr erişimi doğrulandı (KTB-Misafir).")
+                    addLog(LogLevel.SUCCESS, "Ağ Durumu: KTB-Misafir ağında ve internet oturumu aktif (Google OK, Portal OK).")
+                } else if (isCaptiveSuccess) {
+                    // Captive başarılı, Google henüz kapalı -> KTB-Misafir ağında fakat henüz oturum açılmamış (portal bekliyor)
+                    _uiState.update {
+                        it.copy(
+                            isWifiConnected = true,
+                            wifiSsid = "KTB-Misafir",
+                            isKtbNetworkConfirmed = true,
+                            isSessionActive = false
+                        )
+                    }
+                    addLog(LogLevel.INFO, "Ağ Durumu: KTB-Misafir ağına bağlı, giriş kapısı doğrulandı (Portal OK).")
                 } else {
+                    // Google başarılı fakat captive başarısız VEYA her ikisi de başarısız -> KTB-Misafir ağına bağlı değil
                     _uiState.update {
                         it.copy(
                             isWifiConnected = false,
                             wifiSsid = null,
-                            isKtbNetworkConfirmed = false
+                            isKtbNetworkConfirmed = false,
+                            isSessionActive = false
                         )
                     }
+                    addLog(LogLevel.WARNING, "Ağ Durumu: KTB-Misafir ağına bağlı değil (Portal FAIL, Google ${if (isGoogleSuccess) "OK" else "FAIL"}).")
                 }
             }
         } catch (_: Exception) {
             _uiState.update {
-                it.copy(isWifiConnected = false, wifiSsid = null, isKtbNetworkConfirmed = false)
+                it.copy(
+                    isWifiConnected = false,
+                    wifiSsid = null,
+                    isKtbNetworkConfirmed = false,
+                    isSessionActive = false
+                )
             }
         }
     }
