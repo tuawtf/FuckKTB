@@ -197,6 +197,18 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    suspend fun requestSmsCodeForProfile(phoneNumber: String): CaptivePortalClient.PortalResult {
+        val normalized = if (phoneNumber.isNotBlank()) PhoneUtils.normalizePhoneNumber(phoneNumber) else phoneNumber
+        addLog(LogLevel.INFO, "Profil SMS İsteği Gönderiliyor: $normalized")
+        val result = client.createSmsToken(normalized)
+        if (result.isSuccess) {
+            addLog(LogLevel.SUCCESS, "Profil SMS kodu gönderildi (HTTP ${result.httpStatusCode})")
+        } else {
+            addLog(LogLevel.ERROR, "Profil SMS gönderme hatası: ${result.message} (HTTP ${result.httpStatusCode})")
+        }
+        return result
+    }
+
     suspend fun validateSmsTokenForProfile(phoneNumber: String, code: String): CaptivePortalClient.PortalResult {
         val result = client.validateSmsToken(phoneNumber, code)
         if (result.isSuccess) {

@@ -3276,7 +3276,9 @@ private fun ProfileSubPageContent(
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     val normalized = com.example.util.PhoneUtils.normalizePhoneNumber("0$phoneDigits")
                                     viewModel.updatePhoneNumber(normalized)
-                                    viewModel.startConnectionFlow()
+                                    coroutineScope.launch {
+                                        viewModel.requestSmsCodeForProfile(normalized)
+                                    }
                                     context.findActivity()?.let { SmsCodeSource.startSmsUserConsent(it) }
                                     currentStep = 3
                                 },
@@ -3488,7 +3490,9 @@ private fun ProfileSubPageContent(
                                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                             val phone = com.example.util.PhoneUtils.normalizePhoneNumber("0$phoneDigits")
                                             viewModel.updatePhoneNumber(phone)
-                                            viewModel.startConnectionFlow()
+                                            coroutineScope.launch {
+                                                viewModel.requestSmsCodeForProfile(phone)
+                                            }
                                             context.findActivity()?.let { SmsCodeSource.startSmsUserConsent(it) }
                                             resendCooldown = 30
                                             codeInput = ""
