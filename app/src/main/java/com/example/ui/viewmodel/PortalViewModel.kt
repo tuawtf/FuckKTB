@@ -353,7 +353,6 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                             isSessionActive = true
                         )
                     }
-                    addLog(LogLevel.SUCCESS, "Ağ Durumu: KTB-Misafir ağında ve internet oturumu aktif (Google OK, Portal OK).")
                 } else if (isCaptiveSuccess) {
                     // Captive başarılı, Google henüz kapalı -> KTB-Misafir ağında fakat henüz oturum açılmamış (portal bekliyor)
                     _uiState.update {
@@ -364,7 +363,6 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                             isSessionActive = false
                         )
                     }
-                    addLog(LogLevel.INFO, "Ağ Durumu: KTB-Misafir ağına bağlı, giriş kapısı doğrulandı (Portal OK).")
                 } else {
                     // Google başarılı fakat captive başarısız VEYA her ikisi de başarısız -> KTB-Misafir ağına bağlı değil
                     _uiState.update {
@@ -375,7 +373,6 @@ class PortalViewModel(application: Application) : AndroidViewModel(application) 
                             isSessionActive = false
                         )
                     }
-                    addLog(LogLevel.WARNING, "Ağ Durumu: KTB-Misafir ağına bağlı değil (Portal FAIL, Google ${if (isGoogleSuccess) "OK" else "FAIL"}).")
                 }
             }
         } catch (_: Exception) {

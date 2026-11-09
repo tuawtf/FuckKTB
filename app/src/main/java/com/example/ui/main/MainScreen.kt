@@ -137,6 +137,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import kotlinx.coroutines.delay
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.material3.ripple
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
@@ -447,102 +464,12 @@ private fun ConnectTabContent(
                 }
             }
 
-            val buttonBgColor = when (uiState.step) {
-                PortalStep.SUCCESS -> IconColors.SuccessGreen
-                PortalStep.VALIDATING -> MaterialTheme.colorScheme.secondary
-                else -> MaterialTheme.colorScheme.primary
-            }
-            val buttonContentColor = when (uiState.step) {
-                PortalStep.SUCCESS -> Color.White
-                else -> MaterialTheme.colorScheme.onPrimary
-            }
-
-            Surface(
-                onClick = {
-                    if (!userPrefs.isProfileCreated || userPrefs.profileUsername.isBlank() || userPrefs.profilePassword.isBlank()) {
-                        showNoProfileDialog = true
-                    } else if (uiState.step != PortalStep.VALIDATING) {
-                        viewModel.startConnectionFlow()
-                    }
-                },
-                enabled = uiState.step != PortalStep.VALIDATING,
-                shape = CircleShape,
-                color = buttonBgColor,
-                contentColor = buttonContentColor,
-                tonalElevation = 8.dp,
-                shadowElevation = 12.dp,
-                modifier = Modifier
-                    .size(160.dp)
-                    .testTag("big_connect_button")
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        when (uiState.step) {
-                            PortalStep.VALIDATING -> {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(44.dp),
-                                    color = buttonContentColor,
-                                    strokeWidth = 3.5.dp
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = "Giriş Yapılıyor",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = buttonContentColor
-                                )
-                            }
-                            PortalStep.SUCCESS -> {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Bağlı",
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White
-                                )
-                            }
-                            PortalStep.ERROR -> {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    tint = buttonContentColor,
-                                    modifier = Modifier.size(44.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Yeniden Dene",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = buttonContentColor
-                                )
-                            }
-                            else -> {
-                                Icon(
-                                    imageVector = Icons.Default.Wifi,
-                                    contentDescription = null,
-                                    tint = buttonContentColor,
-                                    modifier = Modifier.size(52.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Bağlan",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = buttonContentColor
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            ScallopedConnectButton(
+                step = uiState.step,
+                isProfileConfigured = userPrefs.isProfileCreated && userPrefs.profileUsername.isNotBlank() && userPrefs.profilePassword.isNotBlank(),
+                onConnectClick = { viewModel.startConnectionFlow() },
+                onShowNoProfileDialog = { showNoProfileDialog = true }
+            )
 
             AnimatedVisibility(
                 visible = uiState.step == PortalStep.ERROR,
@@ -586,6 +513,249 @@ private fun ConnectTabContent(
                 }
             }
         )
+    }
+}
+
+// -------------------------------------------------------------
+// DÖNEN DALGALI (10 DİLİMLİ SCALLOPED COOKIE) BAĞLAN BUTONU
+// -------------------------------------------------------------
+private class ScallopedCookieShape(
+    private val scallops: Int = 10,
+    private val amplitude: Float = 0.11f,
+    private val steps: Int = 120
+) : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Outline {
+        val path = Path()
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val maxR = minOf(size.width, size.height) / 2f
+        val baseR = maxR / (1f + amplitude)
+        val twoPi = (2.0 * Math.PI).toFloat()
+
+        for (i in 0 until steps) {
+            val theta = (i.toFloat() / steps) * twoPi
+            val r = baseR * (1f + amplitude * kotlin.math.cos(scallops * theta))
+            val x = cx + r * kotlin.math.cos(theta)
+            val y = cy + r * kotlin.math.sin(theta)
+            if (i == 0) {
+                path.moveTo(x, y)
+            } else {
+                path.lineTo(x, y)
+            }
+        }
+        path.close()
+        return Outline.Generic(path)
+    }
+}
+
+@Composable
+private fun ScallopedConnectButton(
+    step: PortalStep,
+    isProfileConfigured: Boolean,
+    onConnectClick: () -> Unit,
+    onShowNoProfileDialog: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    // Tıklamada hafif ölçek animasyonu (basılıyken 0.94, spring ile geri dön)
+    val buttonScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "buttonScale"
+    )
+
+    // Şekil dolgusu: tema/palet uyumlu, bağlı iken success rengine yumuşak geçiş
+    val shapeColor by animateColorAsState(
+        targetValue = when (step) {
+            PortalStep.SUCCESS -> IconColors.SuccessGreen
+            PortalStep.VALIDATING -> MaterialTheme.colorScheme.secondary
+            else -> MaterialTheme.colorScheme.primary
+        },
+        animationSpec = tween(500),
+        label = "shapeColor"
+    )
+
+    val iconColor by animateColorAsState(
+        targetValue = when (step) {
+            PortalStep.SUCCESS -> Color.White
+            else -> MaterialTheme.colorScheme.onPrimary
+        },
+        animationSpec = tween(500),
+        label = "iconColor"
+    )
+
+    // Dönüş açısı ve hız geçişleri
+    var rotationAngle by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(Unit) {
+        var lastFrameNanos = 0L
+        var currentSpeed = 360f / 14f // Boşta: 360° / 14 sn
+        var isDeceleratingToStop = false
+        var stopStartAngle = 0f
+        var stopTargetAngle = 0f
+        var stopStartTimeNanos = 0L
+        var wasSuccess = false
+
+        while (isActive) {
+            withFrameNanos { frameNanos ->
+                if (lastFrameNanos == 0L) {
+                    lastFrameNanos = frameNanos
+                    return@withFrameNanos
+                }
+                val dt = ((frameNanos - lastFrameNanos) / 1_000_000_000f).coerceIn(0f, 0.1f)
+                lastFrameNanos = frameNanos
+
+                val isSuccess = (step == PortalStep.SUCCESS)
+                val isValidating = (step == PortalStep.VALIDATING)
+
+                if (isSuccess) {
+                    if (!wasSuccess) {
+                        wasSuccess = true
+                        isDeceleratingToStop = true
+                        stopStartAngle = rotationAngle
+                        // 10 dilimli şekil 36°'de kendine benzediği için en yakın 36'nın katına oturt
+                        val baseStop = kotlin.math.ceil(stopStartAngle / 36f) * 36f
+                        stopTargetAngle = if (baseStop - stopStartAngle < 16f) baseStop + 36f else baseStop
+                        stopStartTimeNanos = frameNanos
+                    }
+
+                    if (isDeceleratingToStop) {
+                        val durationNanos = 800_000_000L // 800ms decelerate geçişi
+                        val elapsed = (frameNanos - stopStartTimeNanos).coerceAtLeast(0L)
+                        val progress = (elapsed.toFloat() / durationNanos).coerceIn(0f, 1f)
+                        val pInv = 1f - progress
+                        val eased = 1f - pInv * pInv * pInv
+                        rotationAngle = stopStartAngle + (stopTargetAngle - stopStartAngle) * eased
+                        if (progress >= 1f) {
+                            rotationAngle = stopTargetAngle
+                            isDeceleratingToStop = false
+                            currentSpeed = 0f
+                        }
+                    }
+                } else {
+                    if (wasSuccess) {
+                        // Bağlantı kopunca tekrar boşta durumuna dönsün: yavaş dönüş yumuşakça yeniden başlasın
+                        wasSuccess = false
+                        isDeceleratingToStop = false
+                        currentSpeed = 5f
+                    }
+
+                    // 1) Boşta: 360° / 14 sn (~25.71 deg/s)
+                    // 2) Bağlanıyor: 360° / 3.5 sn (~102.86 deg/s)
+                    val targetSpeed = if (isValidating) (360f / 3.5f) else (360f / 14f)
+
+                    // Hız değişirken açı zıplamasın: hız geçişini yumuşat
+                    val accelRate = if (isValidating) 85f else 35f // deg/s^2
+                    if (currentSpeed < targetSpeed) {
+                        currentSpeed = (currentSpeed + accelRate * dt).coerceAtMost(targetSpeed)
+                    } else if (currentSpeed > targetSpeed) {
+                        currentSpeed = (currentSpeed - accelRate * dt).coerceAtLeast(targetSpeed)
+                    }
+
+                    rotationAngle += currentSpeed * dt
+                    if (rotationAngle >= 3600f) {
+                        rotationAngle -= 3600f
+                    }
+                }
+            }
+        }
+    }
+
+    val contentDesc = when (step) {
+        PortalStep.VALIDATING -> "Bağlanıyor"
+        PortalStep.SUCCESS -> "Bağlı"
+        PortalStep.ERROR -> "Yeniden Dene"
+        else -> "Bağlan"
+    }
+
+    val cookieShape = remember { ScallopedCookieShape(10, 0.11f, 120) }
+
+    Box(
+        modifier = modifier
+            .size(160.dp)
+            .graphicsLayer {
+                scaleX = buttonScale
+                scaleY = buttonScale
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        // 1. DÖNEN DALGALI ŞEKİL (Alt Katman - Gölge/glow yok, düz ve temiz)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    rotationZ = rotationAngle
+                }
+                .background(
+                    color = shapeColor,
+                    shape = cookieShape
+                )
+        )
+
+        // 2. DÖNMEYEN ÜST KATMAN: Tıklama alanı, ripple ve ikon (İkon dik ve sabit kalır)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = androidx.compose.material3.ripple(color = iconColor),
+                    enabled = step != PortalStep.VALIDATING,
+                    role = Role.Button,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (!isProfileConfigured) {
+                            onShowNoProfileDialog()
+                        } else if (step != PortalStep.VALIDATING) {
+                            onConnectClick()
+                        }
+                    }
+                )
+                .semantics {
+                    contentDescription = contentDesc
+                    role = Role.Button
+                }
+                .testTag("big_connect_button"),
+            contentAlignment = Alignment.Center
+        ) {
+            val iconSize = 58.dp
+            when (step) {
+                PortalStep.SUCCESS -> {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
+                PortalStep.ERROR -> {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
+                else -> {
+                    Icon(
+                        imageVector = Icons.Rounded.Wifi,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
+            }
+        }
     }
 }
 
