@@ -37,6 +37,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -3895,11 +3897,14 @@ private fun CustomBottomBar(
         CompositionLocalProvider(LocalRippleConfiguration provides null) {
             HorizontalFloatingToolbar(
                 expanded = true,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
                 colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(
                     toolbarContainerColor = Color.Transparent,
                     toolbarContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 modifier = Modifier
+                    .wrapContentSize()
+                    .padding(horizontal = 16.dp)
                     .frostedContainer(
                         hazeState = hazeState,
                         shape = CircleShape,
@@ -3912,9 +3917,13 @@ private fun CustomBottomBar(
                 tabs.forEachIndexed { index, tab ->
                     val isSelected = selectedTab == tab
                     val isFirstTab = index == 0
+                    val showLabel = isWideScreen || (isSelected && canShowSelectedLabel)
 
                     val buttonModifier = Modifier
                         .height(56.dp)
+                        .then(
+                            if (!showLabel) Modifier.width(56.dp) else Modifier.wrapContentWidth()
+                        )
                         .testTag(tab.testTag)
                         .onGloballyPositioned { coordinates ->
                             tabBounds[tab] = coordinates.boundsInParent()
@@ -3948,6 +3957,7 @@ private fun CustomBottomBar(
                                 onTabSelected(tab)
                             }
                         },
+                        contentPadding = PaddingValues(0.dp),
                         shapes = ToggleButtonDefaults.shapes(shape = CircleShape),
                         colors = ToggleButtonDefaults.toggleButtonColors(
                             containerColor = Color.Transparent,
@@ -3960,7 +3970,7 @@ private fun CustomBottomBar(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.padding(horizontal = if (isSelected && (isWideScreen || canShowSelectedLabel)) 14.dp else 10.dp)
+                            modifier = Modifier.padding(horizontal = if (showLabel) 16.dp else 0.dp)
                         ) {
                             Icon(
                                 imageVector = if (isSelected) tab.filledIcon else tab.outlinedIcon,
@@ -3968,14 +3978,13 @@ private fun CustomBottomBar(
                                 modifier = Modifier.size(24.dp)
                             )
 
-                            val showLabel = isWideScreen || (isSelected && canShowSelectedLabel)
                             AnimatedVisibility(
                                 visible = showLabel,
                                 enter = expandHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(),
                                 exit = shrinkHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeOut()
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = tab.title,
                                         style = MaterialTheme.typography.titleSmall,
